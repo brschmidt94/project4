@@ -50,6 +50,5 @@ int writeBlock(int disk, int bNum, void *block) {
 }
 
 void closeDisk(int disk) {
-	fclose(disk);
+	close(disk);
 }
-
