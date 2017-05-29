@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include "tinyFS.h"
 #include "TinyFS_errno.h"
 #include "libDisk.h"
@@ -11,7 +12,7 @@ int openDisk(char *filename, int nBytes) {
 	//is nBytes the # of BLOCKS? or the number of bytes of the overall file
 	//% 256 = 0
 	
-	if(nBytes < 0 || nBytes % BLOCKSIZE != 0) {
+	if(nBytes >= 0 && nBytes % BLOCKSIZE == 0) {
 		if(access(filename, F_OK) != -1) { //If the file already exists
 			if(nBytes > 0) //Overwrite existing file
 				disk = fopen(filename, "w+");
@@ -54,9 +55,16 @@ void closeDisk(int disk) {
 
 }
 
-}
-
 int main() {
+	int disk;
+	
+	char *buff = calloc(BLOCKSIZE, sizeof(char));
+	
+	disk = openDisk("a.txt", BLOCKSIZE);
+	printf("%d\n", disk);
+	writeBlock(disk, 0, buff);
+	close(disk);
+	
 	return 0;
 }
 
