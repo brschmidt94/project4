@@ -11,7 +11,7 @@ int openDisk(char *filename, int nBytes) {
 	//is nBytes the # of BLOCKS? or the number of bytes of the overall file
 	//% 256 = 0
 	
-	if(nBytes % BLOCKSIZE != 0) {
+	if(nBytes < 0 || nBytes % BLOCKSIZE != 0) {
 		if(access(filename, F_OK) != -1) { //If the file already exists
 			if(nBytes > 0) //Overwrite existing file
 				disk = fopen(filename, "w+");
@@ -20,11 +20,13 @@ int openDisk(char *filename, int nBytes) {
 		}
 		else //We are making a new file
 			disk = fopen(filename, "w");
+		
+		diskNum = fileno(disk);
 	}
 	else
-		diskNum = -1;
+		diskNum = -1; //ERROR: nBytes not integral with BLOCKSIZE
 		
-	return fileno(disk);
+	return diskNum;
 }
 
 int readBlock(int disk, int bNum, void *block) {
