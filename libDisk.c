@@ -16,7 +16,7 @@ int openDisk(char *filename, int nBytes) {
 			if(nBytes > 0) //Overwrite existing file
 				disk = fopen(filename, "w+");
 			else//nBytes == 0. Open existing file as read-only
-				disk = fopen(filename, "r");
+				disk = fopen(filename, "r"); //Do not overwrite
 		}
 		else //We are making a new file
 			disk = fopen(filename, "w");
@@ -42,11 +42,9 @@ int readBlock(int disk, int bNum, void *block) {
 
 int writeBlock(int disk, int bNum, void *block) {
 	int status = 0; //Stores error/success state
-	int fileOffset;
 	
-	//Index into file by block number
-	if(fileOffset = lseek(disk, bNum * BLOCKSIZE, SEEK_CUR) >= 0)
-		status = fwrite(block, sizeof(char), bNum * BLOCKSIZE, fileOffset);
+	if(pwrite(disk, block, BLOCKSIZE, bNum * BLOCKSIZE) == -1)
+		status = -3; //WRITE_ERROR errno
 	
 	return status;
 }
