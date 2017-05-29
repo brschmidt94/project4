@@ -33,7 +33,7 @@ int readBlock(int disk, int bNum, void *block) {
 	int status = 0; //Stores error/success state
 	
 	//Read into buff
-	if(pread(disk, block, BLOCKSIZE, bNum * BLOCKSIZE) == -1) //changed to seek_set from seek_cur bc offset from beginning always?
+	if(pread(disk, block, BLOCKSIZE, bNum * BLOCKSIZE) == -1) 
 		status = -1;//TODO: handle error
 		//status = read(block, sizeof(char), bNum * BLOCKSIZE, fileOffset);
 	
@@ -51,4 +51,12 @@ int writeBlock(int disk, int bNum, void *block) {
 
 void closeDisk(int disk) {
 	close(disk);
+
 }
+
+}
+
+int main() {
+	return 0;
+}
+
