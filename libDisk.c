@@ -29,11 +29,11 @@ int openDisk(char *filename, int nBytes) {
 
 int readBlock(int disk, int bNum, void *block) {
 	int status = 0; //Stores error/success state
-	off_t *fileOffset;
 	
-	//Index into file by block number
-	if((fileOffset = lseek(disk, bNum * BLOCKSIZE, SEEK_CUR)) >= 0)
-		status = fread(block, sizeof(char), bNum * BLOCKSIZE, fileOffset);
+	//Read into buff
+	if(pread(disk, block, BLOCKSIZE, bNum * BLOCKSIZE) == -1) //changed to seek_set from seek_cur bc offset from beginning always?
+		status = -1;//TODO: handle error
+		//status = read(block, sizeof(char), bNum * BLOCKSIZE, fileOffset);
 	
 	return status;
 }
