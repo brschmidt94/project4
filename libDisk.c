@@ -11,15 +11,7 @@ int openDisk(char *filename, int nBytes) {
 	int diskNum;
 		
 	if(nBytes >= 0 && nBytes % BLOCKSIZE == 0) {
-		if(access(filename, F_OK) != -1) { //If the file already exists
-			if(nBytes > 0) //Overwrite existing file
-				disk = fopen(filename, "w+");
-			else//nBytes == 0. Open existing file as read-only
-				disk = fopen(filename, "r"); //Do not overwrite
-		}
-		else //We are making a new file
-			disk = fopen(filename, "w");
-		
+		disk = fopen(filename, "rw");
 		diskNum = fileno(disk);
 	}
 	else
