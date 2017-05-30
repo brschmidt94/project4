@@ -50,6 +50,9 @@ int writeBlock(int disk, int bNum, void *block) {
 	return status;
 }
 
+/*
+ * Disk is file descriptor.
+ */
 void closeDisk(int disk) {
 	close(disk);
 
