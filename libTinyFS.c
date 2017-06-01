@@ -72,23 +72,43 @@ int tfs_mkfs(char *filename, int nBytes) {
 
 int tfs_mount(char *filename) {
 	int diskNum = -4; //ERROR: IMPROPER DISK FORMAT
-	//Where is nBytes set?
-	
-	if(verifyFormat(filename)) {
-		diskNum = openDisk(filename, 0); //We pass zero since its ALREADY MADE
+
+	diskNum = openDisk(filename, 0); //We pass zero since its presumable ALREADY MADE
 			
-		if(diskNum == -1)
-			diskNum = -7; //ERROR: MAKE/MOUNT NON EXISTANT FILE 
+	//if the file is non-existant, can't mount
+	if(diskNum == -1) {
+		diskNum = -7; //ERROR: MAKE/MOUNT NON EXISTANT FILE 
+	} else { //if the file is existant, check it is mountable (correct format)
+		//I moved verify format AFTER open disk because it needs to be opened to read and verify it...
+		//close disk if it is not mountable (ie if it doesn't have the magic numbers)
+		//return an error
+		if(verifyFormat(diskNum) != 0) {
+			closeDisk(diskNum);
+			diskNum = -8; //ERROR: TRIED TO MOUNT FILE WITH WRONG FORMAT
+		}
 	}
+
 	
 	return diskNum;
 }
 
-int verifyFormat(char *filename, ) {
-	//KIRSTEN
-	//ITERATE THRU LINKED LISTS
-	
-	return 1;
+/*
+ * Pass in the fd of the file system being mounted.  The file has been opened, but must 
+ * have 0x45 as the magic number in each block to be mounted.
+ * Return 0 if correct format, and -1 otherwise.
+ */
+int verifyFormat(int diskNum) {
+	int ret = 0;
+	char *buff = calloc(BLOCKSIZE, sizeof(char));
+	int index = 0;
+	int validRead = 0;
+
+	validRead = readBlock(diskNum, 0, buff) // read in superblock
+
+	while (validRead >= 0 && buff[1] == 0x45) { //while reading block  doesn't cause error
+
+	} 
+	return ret;
 }
 
 /* tfs_unmount(void) "unmounts" the currently mounted file system
