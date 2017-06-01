@@ -11,7 +11,12 @@ int openDisk(char *filename, int nBytes) {
 	int diskNum;
 		
 	if(nBytes >= 0 && nBytes % BLOCKSIZE == 0) {
-		disk = fopen(filename, "rw");
+		if(nBytes == 0 && access(filename, F-OK) != 0)
+			diskNum = -1; //ERROR: MAKE/MOUNT NON EXISTANT FILE 
+		else
+			disk = fopen(filename, "rw");
+			
+		//TEST ERROR ON NON EXISTANT FILE
 		diskNum = fileno(disk);
 	}
 	else
