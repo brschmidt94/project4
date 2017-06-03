@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "tinyFS.h"
 #include "TinyFS_errno.h"
 
@@ -16,56 +17,87 @@ int tfs_readByte(fileDescriptor FD); //K
 int tfs_seek(fileDescriptor FD, int offset); //B
 int verifyFormat(char *filename); //K
 
-int diskSize = 0; //KEEP TRACK OF THIS
+//This is a dynamically allocated linked list of openfiles.
+struct openFile {
+	fileDescriptor fd; //The blockNum index of the inode for a file on the FS
+  char *filename;
+  struct openFile *next;
+};
+
+
+
+int mounted = -1; //Do we need this?
+//NOTE: Per the spec, only one disk is mounted at a time
+int diskNum = 0; //Actual UNIX File descriptor of currently mounted file
+int diskSize = 0; //The size in bytes of the currently mounted disk
 //TODO KEEP TRACK OF SIZES
-int mounted = -1;  //file descriptor of mounted file, or negative one if none mounted
-int diskNum = 0;
+struct openFile *fileList = NULL;
 
 int tfs_mkfs(char *filename, int nBytes) {
 	char *format;
 	diskSize = nBytes;
 	
-	diskNum = openDisk(fileName, nBytes);
-	
-	if(diskNum == -1)
+	if((diskNum = openDisk(fileName, nBytes)) == -1)
 		diskNum = -6; ////ERROR: Tried to make empty filesystem of size 0
 	
-	if(nBytes > 2) {
+	if(nBytes < 2) //We assume that a file of just superblock and root inode can be made
+		diskNum = -4; //ERROR: FILESYSTEM SIZE TOO SMALL
+	else {
 		format = calloc(BLOCKSIZE, sizeof(char));
 		format[1] = 0x45;
 		
-		//set superblock
-		format[0] = 1;  //block type
-		format[2] = BLOCKSIZE;// pointer to root inode
-		format[3] = BLOCKSIZE * 2; //Pointer to free blocks - this will change over time
+
+		//Format Superblock
+		format[0] = 1; //Block type
+		format[2] = 1; //Pointer to Root Inode		
+		/////////////////////////////////////////////////////////
+		format[3] = 0; //SET BLOCK NUMBER IN THE EMPTY SPOT
+		
+		// NEED TO DISCUSS THIS
+		// WE SHOULD GIVE EACH BLOCK WE MAKE AN INDEX NUM
+		// THIS WAY WE CAN QUICKLY JUMP AROUND FILE
+		// WE COULD STORE BLOCKNUM AT format[3]
+	
+	
+		//It is simple to not store pointers as BLOCKNUM * BLOCKSIZE. Just use a normal index integer
+		format[4] = 2; //Pointer to free blocks - this will change over time
+		////////////////////////////////////////////////////////////
 		writeBlock(diskNum, 0, format);
 		
-		//set root inode
-		format[0] = 2;
-		format[2] = NULL; // We don;t have anything yet THERE ARE INDOES
-		format[3] = 0; //[EMPTY]
-		format[4] = "/";
-		format[5] = "\0";
-		format[13] = 0; 
-		format[14] = NULL; //file extents
-		
+		//Set Root Inode
+		format[0] = 2; //Block type
+		format[2] = -1; //Pointer to list of Inodes. We dont use NULL because it isnt a memory address
+		///////////////////////////////////
+		format[3] = 1; //[EMPTY] spot
+		//////////////////////////////////
+		format[4] = "/"; //Name
+		format[5] = "\0"; //Null char
+		format[13] = 0; //File size
+		format[14] = -1; //Pointer to list of file extents	
 		writeBlock(diskNum, 1, format);
 		
-		//set free blocks
+		//Set block to Free Block format	
 		format[0] = 4;
-		for(int block = 2; block < nBytes / BLOCKSIZE; block ++) {	
+		for(int index = 2; index < 15; index++)
+			format[index] = 0; //Zero out format block from previous formatting
+		
+		//Set free blocks
+		for(int block = 2; block < nBytes / BLOCKSIZE; block++) {	
 			if(block == (nBytes / BLOCKSIZE) - 1)
-				format[2] = NULL;
+				format[2] = -1; //End of list
 			else
-				format[2] = (block * BLOCKSIZE) + 1;
+				format[2] = block + 1; //Point to next block
+			
+			/////////////////////////////////////////
+			format[3] = block;
+			/////////////////////////////////////////
 		
 			writeBlock(diskNum, block, format);
-		
-			closeDisk(diskNum);
 		}
-		else
-			diskNum = -4; //ERROR: FILESYSTEM SIZE TOO SMALL
-	
+		
+		closeDisk(diskNum);
+	}
+			
   //TODO save size somewhere
 	return diskNum;
 }
@@ -129,3 +161,101 @@ int verifyFormat(int diskNum) {
 
  	return status;
  }
+ 
+ 
+fileDescriptor tfs_openFile(char *name) {
+	int status = -1;
+	openFile *endOfList = NULL;
+	int inodeIndex = 0;
+	
+	
+	//Look in currently mounted FS
+	//We can open multiple files, so we need to keep track of what we've
+	//openened. For this we can use an array or a LL. The spec says "DYNAMIC",
+	//so I imagine he wants a LL since we can malloc and free it.
+	
+	
+	//Iterate to spot in list right here
+	if(fileList == NULL) { //File list currently empty. Allocate LL head.
+		fileList = (struct openFile *) malloc(sizeof(struct openFile));
+	else {
+		endOfList = fileList;
+		
+		//Check if file already exists here
+		while(endOfList->next != NULL)
+			endOfList = endOfList->next;
+		
+		endOfList->next = malloc(sizeof(struct openFile));
+		endOfList = endOfList->next;
+	}
+
+	//endOfList now points to a fresh file entry
+	//Set the struct attributes right here
+	
+	
+	inodeIndex = findFile(name);
+	
+	endOfList->fd = inodeIndex;
+ 	endOfList->fileName = malloc(sizeof(char) * 9);
+	
+	return inodeIndex;
+}
+
+int findFile(char *name) {
+	char *block = calloc(sizeof(char), BLOCKSIZE);
+	int nextInode = 0; //This is the INDEX of the next linked inode we read in.
+	//Note that this is the ABSOLUTE index and not an offset.
+	int fileExists = 0;
+	int newFile = 0;
+	
+	//We either find a file through list of inodes
+	//or create a new inode
+	
+	readBlock(diskNum, 1, block); //Read in root inode
+
+	while(!fileExists && !newFile) {
+		if(strcmp(block + 4, name))
+			fileExists = 1;
+		else if(block[2] == -1)
+			newFile = 1;
+		else {
+			nextInode = block[2];
+			readBlock(diskNum, nextInode, block);
+		}
+	}
+	
+	if(fileExists)
+		fileInode = nextInode;
+	else if(newFile) {
+		//In this case we will need to append an inode to nextInode and return the
+		//index of that new indode
+		
+		fileInode = getFreeBlock;
+		
+		if(fileInode != -1)
+			block[2] = fileInode; //Attached new inode to end of inode list
+	}
+
+	//This is the absolute index of the inode on the file. We either opened it or created it.
+  return fileInode;
+}
+
+int getFreeBlock(char *name) {
+	int freeBlockIndex = -1;
+	char *block = calloc(sizeof(char), BLOCKSIZE);
+	char *freeBlock;
+	
+	readBlock(diskNum, 0, block); //Read in superblock
+	
+	//If there is a freeblock for allocate an inode for
+	if(block[3] != -1) {
+		freeBlock = block[3]; //Save index of freeblock
+		
+		freeBlockIndex = calloc(sizeof(char), BLOCKSIZE);
+		readBlock(diskNum, freeBlockIndex, BLOCKSIZE);
+		
+		block[3] = freeBlockIndex[3]; //Patch the gap in the Linked list	
+	}
+	
+	return freeBlock;
+}
