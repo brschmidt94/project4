@@ -95,26 +95,31 @@ int tfs_mkfs(char *filename, int nBytes) {
 	return diskNum;
 }
 
+/*
+ * 
+ */
 int tfs_mount(char *filename) {
-	int diskNum = -4; //ERROR: IMPROPER DISK FORMAT
+	int status = -4; //ERROR: IMPROPER DISK FORMAT
 
-	diskNum = openDisk(filename, 0); //We pass zero since its presumable ALREADY MADE
+	status = openDisk(filename, 0); //We pass zero since its presumable ALREADY MADE
 	//TODO....want to set global diskNum
 
 	//if the file is non-existant, can't mount
-	if(diskNum == -1) {
-		diskNum = -7; //ERROR: MAKE/MOUNT NON EXISTANT FILE 
+	if(status == -1) {
+		status = -7; //ERROR: MAKE/MOUNT NON EXISTANT FILE 
 	} else { //if the file is existant, check it is mountable (correct format)
 		//I moved verify format AFTER open disk because it needs to be opened to read and verify it...
 		//close disk if it is not mountable (ie if it doesn't have the magic numbers)
 		//return an error
-		if(verifyFormat(diskNum) != 0) {
-			closeDisk(diskNum);
-			diskNum = -8; //ERROR: TRIED TO MOUNT FILE WITH WRONG FORMAT
+		if(verifyFormat(status) != 0) {
+			closeDisk(status);
+			status = -8; //ERROR: TRIED TO MOUNT FILE WITH WRONG FORMAT
 		}
 	}
 
-	return diskNum;
+	diskNum = status;
+
+	return status;
 }
 
 /*
@@ -166,9 +171,9 @@ int verifyFormat(int diskNum) {
 				return -1;
 
 		}
-	} else {
+	} else 
 		ret = -1;
-	}
+	
 	return ret;
 }
 
