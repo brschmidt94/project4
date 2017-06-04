@@ -282,6 +282,7 @@ int findFile(char *name) {
   return fileInode;
 }
 
+//TODO: fix details
 int getFreeBlock(char *name) {
 	int freeBlockIndex = -1;
 	char *block = calloc(sizeof(char), BLOCKSIZE);
@@ -330,23 +331,43 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 
 	if (found) {
 		//TODO: make sure diskNum was set properly in mount as global...not local
-		//format[14] pointes to...
+		//format[14] pointes to data
 		//get the inode to get address
-		readBlock(diskNum, FD, block);
+		readBlock(diskNum, FD, block);  //block = inode
+		int freeind = getFreeBlock();
+		block[14] = freeind;
+		writeBlock(diskNum, FD, block); //set pointer in inode to next data block
+		file->filepointer = freeind + 4; 			 //does this change the actual thing in the list?
+				//note - it points the the data, not first bytes
 		int ind;
+		int last = 0;
 		//round up division?
-		for (ind = 0; ind <  ((size + (BLOCKSIZE - 4) - 1) / (BLOCKSIZE - 4)); ind++) {
-			//get free block and write to and set pointers
+		for (ind = 0; ind < ((size + (BLOCKSIZE - 4) - 1) / (BLOCKSIZE - 4)); ind++) {
+			if (ind == ((size + (BLOCKSIZE - 4) - 1) / (BLOCKSIZE - 4)) - 1)
+				last = 1;
+
+			readBlock(diskNum, freeind, block);  //read free block
+
+			if (last) {
+				block[2] = -1;
+				//write data
+				memcopy(block + 4, ind *(BLOCKSIZE - 4) + buffer, size - (BLOCKSIZE - 4) * ind);
+				writeBlock(diskNum, freeind, block);
+			} else {
+				int  nextind = getFreeBlock();
+				block[2] = nextind;
+				memcopy(block + 4, ind *(BLOCKSIZE - 4) + buffer, BLOCKSIZE - 4);
+				writeBlock(diskNum, freeind, block);
+				freeind = nextind;
+			}
+
 		}
-	
-		//if (extentind = getFreeBlock())
-		//writeBlock(diskNum, FD, buffer); but to actual extents and not inode
-		//set to 0...file->filepointer = ;
 
 	} else {
 		//TODO: set error for file not opened
 		//set status
 	}
+
 	return status;
 }
 
