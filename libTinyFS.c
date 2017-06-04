@@ -9,9 +9,9 @@
 int tfs_mkfs(char *filename, int nBytes);
 int tfs_mount(char *filename);
 
-int tfs_unmount(void);
+int tfs_unmount(void);//-
 // *make sure set diskNum or mounted properly and use consistent one throughout code
-fileDescriptor tfs_openFile(char *name);// B
+fileDescriptor tfs_openFile(char *name);// B //-
 int tfs_closeFile(fileDescriptor FD); //K
 int tfs_writeFile(fileDescriptor FD, char *buffer, int size); //K *set errors for getFreeBlock? why (char)
 //K *check todos: need diskNum saved in mount
@@ -114,7 +114,6 @@ int tfs_mount(char *filename) {
 		}
 	}
 
-	
 	return diskNum;
 }
 
@@ -292,22 +291,26 @@ int findFile(char *name) {
   return fileInode;
 }
 
-int getFreeBlock(char *name) {
+int getFreeBlock() {
 	int freeBlockIndex = -1;
-	char *block = calloc(sizeof(char), BLOCKSIZE);
-	char *freeBlock;
+	char *superBlock = calloc(sizeof(char), BLOCKSIZE);
+	char *middleBlock = calloc(sizeof(char), BLOCKSIZE);
+	int freeBlock;
 	
-	readBlock(diskNum, 0, block); //Read in superblock
+	readBlock(diskNum, 0, suoerBlock); //Read in superblock
 	
 	//If there is a freeblock for allocate an inode for
-	if(block[3] != -1) {
-		freeBlock = block[3]; //Save index of freeblock
+	if(superBlock[4] != -1) {
+		freeBlock = superBlock[4]; //Save index of freeblock
 		
-		freeBlockIndex = calloc(sizeof(char), BLOCKSIZE);
-		readBlock(diskNum, freeBlockIndex, BLOCKSIZE);
+		readBlock(diskNum, freeBlock, middleBlock);
 		
-		block[3] = freeBlockIndex[3]; //Patch the gap in the Linked list	
+		superBlock[4] = middleBlock[4]; //Patch the gap in the Linked list
+		writeBlock(diskNum, 0, superBlock);	
 	}
+	
+	free(superBlock);
+	free(middleBlock);
 	
 	return freeBlock;
 }
