@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h> 
 #include "tinyFS.h"
 #include "TinyFS_errno.h"
 #include "libDisk.h"
