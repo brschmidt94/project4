@@ -15,7 +15,7 @@ int tfs_writeFile(fileDescriptor FD); //K
 int tfs_deleteFile(fileDescriptor FD); //B
 int tfs_readByte(fileDescriptor FD); //K
 int tfs_seek(fileDescriptor FD, int offset); //B
-int verifyFormat(char *filename); //K
+int verifyFormat(int filename); //K
 
 //This is a dynamically allocated linked list of openfiles.
 struct openFile {
@@ -37,7 +37,7 @@ int tfs_mkfs(char *filename, int nBytes) {
 	char *format;
 	diskSize = nBytes;
 	
-	if((diskNum = openDisk(fileName, nBytes)) == -1)
+	if((diskNum = openDisk(filename, nBytes)) == -1)
 		diskNum = -6; ////ERROR: Tried to make empty filesystem of size 0
 	
 	if(nBytes < 2) //We assume that a file of just superblock and root inode can be made
@@ -70,19 +70,21 @@ int tfs_mkfs(char *filename, int nBytes) {
 		///////////////////////////////////
 		format[3] = 1; //[EMPTY] spot
 		//////////////////////////////////
-		format[4] = "/"; //Name
-		format[5] = "\0"; //Null char
+		format[4] = '/'; //Name
+		format[5] = '\0'; //Null char
 		format[13] = 0; //File size
 		format[14] = -1; //Pointer to list of file extents	
 		writeBlock(diskNum, 1, format);
 		
 		//Set block to Free Block format	
 		format[0] = 4;
-		for(int index = 2; index < 15; index++)
+		int index;
+		for(index = 2; index < 15; index++)
 			format[index] = 0; //Zero out format block from previous formatting
 		
 		//Set free blocks
-		for(int block = 2; block < nBytes / BLOCKSIZE; block++) {	
+		int block;
+		for(block = 2; block < nBytes / BLOCKSIZE; block++) {	
 			if(block == (nBytes / BLOCKSIZE) - 1)
 				format[2] = -1; //End of list
 			else
@@ -132,14 +134,50 @@ int tfs_mount(char *filename) {
 int verifyFormat(int diskNum) {
 	int ret = 0;
 	char *buff = calloc(BLOCKSIZE, sizeof(char));
+	char *extents = calloc(BLOCKSIZE, sizeof(char));
 	int index = 0;
 	int validRead = 0;
 
-	validRead = readBlock(diskNum, 0, buff) // read in superblock
+	validRead = readBlock(diskNum, 0, buff); // read in superblock
 
-	while (validRead >= 0 && buff[1] == 0x45) { //while reading block  doesn't cause error
+	//verify magic number is in each block
+	if (validRead >= 0 && buff[1] == 0x45) { //if reading superblock  doesn't cause error
+		//save index of free blocks
+		int freeind = buff[4];
 
-	} 
+		//verify inodes and file extents 
+		//(block 2 (third block in) points to inodes)
+		//block 14 in inodes points to file extents
+		while (buff[2] != -1) { //loop through inodes
+			validRead = readBlock(diskNum, buff[2], buff);
+			if (validRead < 0 || buff[1] != 0x45)
+				return -1;
+
+			//buff has inode
+			validRead = readBlock(diskNum, buff[14], extents);
+			if (validRead < 0 && extents[1] != 0x45) 
+				return -1;
+
+			while (extents[14] != -1) {  //loop through file extents
+				validRead = readBlock(diskNum, extents[2], extents); //TODO: is 2 right index???
+				if (validRead < 0 || extents[1] != 0x45)
+					return -1;
+			}
+			
+		}
+
+		//verify free blocks
+		validRead = readBlock(diskNum, freeind, buff);
+		if (validRead < 0 && buff[1] != 0x45) 
+			return -1;
+		while (buff[2] != -1) {
+			if (validRead < 0 || buff[1] != 0x45)
+				return -1;
+
+		}
+	} else {
+		ret = -1;
+	}
 	return ret;
 }
 
@@ -165,7 +203,7 @@ int verifyFormat(int diskNum) {
  
 fileDescriptor tfs_openFile(char *name) {
 	int status = -1;
-	openFile *endOfList = NULL;
+	struct openFile *endOfList = NULL;
 	int inodeIndex = 0;
 	
 	
@@ -178,6 +216,7 @@ fileDescriptor tfs_openFile(char *name) {
 	//Iterate to spot in list right here
 	if(fileList == NULL) { //File list currently empty. Allocate LL head.
 		fileList = (struct openFile *) malloc(sizeof(struct openFile));
+	}
 	else {
 		endOfList = fileList;
 		
@@ -196,7 +235,7 @@ fileDescriptor tfs_openFile(char *name) {
 	inodeIndex = findFile(name);
 	
 	endOfList->fd = inodeIndex;
- 	endOfList->fileName = malloc(sizeof(char) * 9);
+ 	endOfList->filename = malloc(sizeof(char) * 9);
 	
 	return inodeIndex;
 }
