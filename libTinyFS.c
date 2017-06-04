@@ -9,7 +9,7 @@
 int tfs_mkfs(char *filename, int nBytes);
 int tfs_mount(char *filename);
 int tfs_unmount(void);
-fileDescriptor tfs_openFile(char *name);// B
+fileDescriptor tfs_openFile(char *name);
 int tfs_closeFile(fileDescriptor FD); //K
 int tfs_writeFile(fileDescriptor FD); //K
 int tfs_deleteFile(fileDescriptor FD); //B
@@ -23,8 +23,6 @@ struct openFile {
   char *filename;
   struct openFile *next;
 };
-
-
 
 int mounted = -1; //Do we need this?
 //NOTE: Per the spec, only one disk is mounted at a time
@@ -46,19 +44,9 @@ int tfs_mkfs(char *filename, int nBytes) {
 		format = calloc(BLOCKSIZE, sizeof(char));
 		format[1] = 0x45;
 		
-
 		//Format Superblock
 		format[0] = 1; //Block type
 		format[2] = 1; //Pointer to Root Inode		
-		/////////////////////////////////////////////////////////
-		format[3] = 0; //SET BLOCK NUMBER IN THE EMPTY SPOT
-		
-		// NEED TO DISCUSS THIS
-		// WE SHOULD GIVE EACH BLOCK WE MAKE AN INDEX NUM
-		// THIS WAY WE CAN QUICKLY JUMP AROUND FILE
-		// WE COULD STORE BLOCKNUM AT format[3]
-	
-	
 		//It is simple to not store pointers as BLOCKNUM * BLOCKSIZE. Just use a normal index integer
 		format[4] = 2; //Pointer to free blocks - this will change over time
 		////////////////////////////////////////////////////////////
@@ -67,9 +55,6 @@ int tfs_mkfs(char *filename, int nBytes) {
 		//Set Root Inode
 		format[0] = 2; //Block type
 		format[2] = -1; //Pointer to list of Inodes. We dont use NULL because it isnt a memory address
-		///////////////////////////////////
-		format[3] = 1; //[EMPTY] spot
-		//////////////////////////////////
 		format[4] = "/"; //Name
 		format[5] = "\0"; //Null char
 		format[13] = 0; //File size
@@ -87,10 +72,6 @@ int tfs_mkfs(char *filename, int nBytes) {
 				format[2] = -1; //End of list
 			else
 				format[2] = block + 1; //Point to next block
-			
-			/////////////////////////////////////////
-			format[3] = block;
-			/////////////////////////////////////////
 		
 			writeBlock(diskNum, block, format);
 		}
@@ -174,10 +155,14 @@ fileDescriptor tfs_openFile(char *name) {
 	//openened. For this we can use an array or a LL. The spec says "DYNAMIC",
 	//so I imagine he wants a LL since we can malloc and free it.
 	
+	if(strlen(name) == 8)
+		return -11; //STRING TOO LONG
 	
 	//Iterate to spot in list right here
 	if(fileList == NULL) { //File list currently empty. Allocate LL head.
 		fileList = (struct openFile *) malloc(sizeof(struct openFile));
+		fileList->next = NULL;
+	}
 	else {
 		endOfList = fileList;
 		
@@ -187,23 +172,26 @@ fileDescriptor tfs_openFile(char *name) {
 		
 		endOfList->next = malloc(sizeof(struct openFile));
 		endOfList = endOfList->next;
+		endOfList->next = NULL;
 	}
 
 	//endOfList now points to a fresh file entry
 	//Set the struct attributes right here
 	
-	
-	inodeIndex = findFile(name);
-	
-	endOfList->fd = inodeIndex;
- 	endOfList->fileName = malloc(sizeof(char) * 9);
+	if((inodeIndex = findFile(name)) != -1) {
+		endOfList->fd = inodeIndex;
+ 		endOfList->fileName = malloc(sizeof(char) * 9);
+		strcpy(endOfList->filename, name)
+	}
+	else
+		inodeIndex = -12; //ERROR: FS is full (Cannot allocated inode)
 	
 	return inodeIndex;
 }
 
 int findFile(char *name) {
 	char *block = calloc(sizeof(char), BLOCKSIZE);
-	int nextInode = 0; //This is the INDEX of the next linked inode we read in.
+	int nextInode = 1; //This is the INDEX of the next linked inode we read in.
 	//Note that this is the ABSOLUTE index and not an offset.
 	int fileExists = 0;
 	int newFile = 0;
@@ -214,6 +202,7 @@ int findFile(char *name) {
 	readBlock(diskNum, 1, block); //Read in root inode
 
 	while(!fileExists && !newFile) {
+			
 		if(strcmp(block + 4, name))
 			fileExists = 1;
 		else if(block[2] == -1)
@@ -230,17 +219,28 @@ int findFile(char *name) {
 		//In this case we will need to append an inode to nextInode and return the
 		//index of that new indode
 		
-		fileInode = getFreeBlock;
+		fileInode = getFreeBlock();
 		
-		if(fileInode != -1)
+		if(fileInode != -1) {
 			block[2] = fileInode; //Attached new inode to end of inode list
+			
+			//Update second to last block
+			writeBlock(diskNum, nextInode, block);
+			
+			block[2] = -1;
+			strcpy(block + 4, name);
+			block[13] = 0;
+			
+			//Alocate new block
+			writeBlock(diskNum, fileInode, block);
+		}
 	}
 
 	//This is the absolute index of the inode on the file. We either opened it or created it.
   return fileInode;
 }
 
-int getFreeBlock(char *name) {
+int getFreeBlock() {
 	int freeBlockIndex = -1;
 	char *block = calloc(sizeof(char), BLOCKSIZE);
 	char *freeBlock;
