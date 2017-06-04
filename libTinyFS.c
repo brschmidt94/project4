@@ -8,14 +8,15 @@
 
 int tfs_mkfs(char *filename, int nBytes);
 int tfs_mount(char *filename);
-int tfs_unmount(void);
+int tfs_unmount(void); // *make sure set diskNum or mounted properly and use consistent one throughout code
 fileDescriptor tfs_openFile(char *name);// B
 int tfs_closeFile(fileDescriptor FD); //K
-int tfs_writeFile(fileDescriptor FD); //K
+int tfs_writeFile(fileDescriptor FD, char *buffer, int size); //K *set errors for getFreeBlock? why (char)
+//K *check todos: need diskNum saved in mount
 int tfs_deleteFile(fileDescriptor FD); //B
-int tfs_readByte(fileDescriptor FD); //K
+int tfs_readByte(fileDescriptor FD, char *buffer); //K *need filepointer to be set to -1 in openFile
 int tfs_seek(fileDescriptor FD, int offset); //B
-int verifyFormat(int filename); //K*
+int verifyFormat(int filename); //K *check logic
 
 //This is a dynamically allocated linked list of openfiles.
 struct openFile {
@@ -27,7 +28,7 @@ struct openFile {
 
 
 
-int mounted = -1; //Do we need this?
+int mounted = -1; //Do we need this?  //USED in unmount
 //NOTE: Per the spec, only one disk is mounted at a time
 int diskNum = 0; //Actual UNIX File descriptor of currently mounted file
 int diskSize = 0; //The size in bytes of the currently mounted disk
@@ -109,7 +110,8 @@ int tfs_mount(char *filename) {
 	int diskNum = -4; //ERROR: IMPROPER DISK FORMAT
 
 	diskNum = openDisk(filename, 0); //We pass zero since its presumable ALREADY MADE
-			
+	//TODO....want to set global diskNum
+
 	//if the file is non-existant, can't mount
 	if(diskNum == -1) {
 		diskNum = -7; //ERROR: MAKE/MOUNT NON EXISTANT FILE 
@@ -298,4 +300,63 @@ int getFreeBlock(char *name) {
 	}
 	
 	return freeBlock;
+}
+
+
+/*
+ * Writes buffer 'buffer' of size 'size', which represents an entire file's content, 
+ * to the file system.  Sets the file pointer to 0 (the start of file) when done.  
+ * Returns success/error codes.
+ */
+int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
+	int status = 0;
+	char *block = calloc(sizeof(char), BLOCKSIZE);
+	//FD is blocknum index for inode for file on mounted file...make sure file is open
+	if(fileList == NULL) {
+		//TODO: set error, for file not opened yet.
+		//set status
+	} 
+
+	struct openFile *file = fileList;
+	int ind = 0;
+	int found = 0;
+	while (file->next != NULL && !found) {
+		if (file->fd == FD) {
+			found = 1;
+		} else {
+			file = file->next;
+		}
+	}
+
+	if (found) {
+		//TODO: make sure diskNum was set properly in mount as global...not local
+		//format[14] pointes to...
+		//get the inode to get address
+		readBlock(diskNum, FD, block);
+		int ind;
+		//round up division?
+		for (ind = 0; ind <  ((size + (BLOCKSIZE - 4) - 1) / (BLOCKSIZE - 4)); ind++) {
+			//get free block and write to and set pointers
+		}
+	
+		//if (extentind = getFreeBlock())
+		//writeBlock(diskNum, FD, buffer); but to actual extents and not inode
+		//set to 0...file->filepointer = ;
+
+	} else {
+		//TODO: set error for file not opened
+		//set status
+	}
+	return status;
+}
+
+/*
+ * Reads one byte from the file and copies it to buffer, using the current
+ * file pointer location and incrementing it by one upon success.  If the file
+ * pointer is already at the end of the file, then tsf_readByte() should return
+ * an error and not increment the file pointer.
+ */
+int tfs_readByte(fileDescriptor FD, char *buffer) {
+
+	return 0;
 }
