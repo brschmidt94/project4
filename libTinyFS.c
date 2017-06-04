@@ -15,13 +15,14 @@ int tfs_writeFile(fileDescriptor FD); //K
 int tfs_deleteFile(fileDescriptor FD); //B
 int tfs_readByte(fileDescriptor FD); //K
 int tfs_seek(fileDescriptor FD, int offset); //B
-int verifyFormat(int filename); //K
+int verifyFormat(int filename); //K*
 
 //This is a dynamically allocated linked list of openfiles.
 struct openFile {
 	fileDescriptor fd; //The blockNum index of the inode for a file on the FS
   char *filename;
   struct openFile *next;
+  char *filepointer;  //ADDED THIS TO USE IN MY FUNCTIONS
 };
 
 
@@ -236,7 +237,7 @@ fileDescriptor tfs_openFile(char *name) {
 	
 	endOfList->fd = inodeIndex;
  	endOfList->filename = malloc(sizeof(char) * 9);
-	
+	endOfList->filepointer = -1;  //ADDED THIS FOR WRITEFILE...Need to run it by you
 	return inodeIndex;
 }
 
