@@ -11,19 +11,24 @@
 int openDisk(char *filename, int nBytes) {
 	FILE *disk;
 	int diskNum;
-		
+
 	if(nBytes >= 0 && nBytes % BLOCKSIZE == 0) {
-		if(nBytes == 0 && access(filename, F-OK) != 0)
+		
+		
+		if(nBytes == 0 && access(filename, F_OK) != 0) {
 			diskNum = -1; //ERROR: MAKE/MOUNT NON EXISTANT FILE 
-		else
-			disk = fopen(filename, "rw");
-			
+		}
+		else if(nBytes == 0) //Open, do not clear
+			disk = fopen(filename, "r+");
+		else //Open and clear
+			disk = fopen(filename, "w");
+						
 		//TEST ERROR ON NON EXISTANT FILE
 		diskNum = fileno(disk);
 	}
 	else
 		diskNum = -1; //ERROR: nBytes not integral with BLOCKSIZE
-		
+	
 	return diskNum;
 }
 
@@ -53,17 +58,3 @@ int writeBlock(int disk, int bNum, void *block) {
 void closeDisk(int disk) {
 	close(disk);
 }
-
-int main() {
-	int disk;
-	
-	char *buff = calloc(BLOCKSIZE, sizeof(char));
-	memcpy(buff, "Bradley Schmidt", 16);
-	
-	disk = openDisk("a.txt", BLOCKSIZE);
-	writeBlock(disk, 0, buff);
-	close(disk);
-	
-	return 0;
-}
-
