@@ -61,9 +61,9 @@ int main(int argc, char** argv) {
 	tfs_writeFile(fd, buffer, 256);  //should take up 2 free blocks because extra bytes in beginning
 
 	char *buf = calloc(1, sizeof(char));
-	for (i = 0; i < 257; i++) {
+	for (i = 0; i < 256; i++) {
 		tfs_readByte(fd, buf);
-		//printf("%d ", buf[0]);
+		printf("%hhx ", buf[0]);
 	}
 	printf("\n");
 
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
 
 void printDiagnostics(int diskNum) {
 	char *data = calloc(BLOCKSIZE, sizeof(char));
-	
+	int z;
 	int block;
 	for(block = 0; block < DEFAULT_BLOCK_SIZE / BLOCKSIZE; block++) {
 		readBlock(diskNum, block, data);
@@ -96,23 +96,18 @@ void printDiagnostics(int diskNum) {
 				printf("Inode List Address: %d\n", data[2]);
 				printf("Empty Spot: %d\n", data[3]);
 				printf("Name: %s\n", data + 4);
-				printf("Size: %d\n", data[13]);
+				memcpy(&z, data +15, 4);
+				printf("Size: %d\n", z);
 				printf("File extents list address: %d\n", data[14]);
 			}
 			else {
-				/*printf("INODE @ %d\n", block);
-				printf("Magic Number: %d\n", data[1]);
-				printf("File Extent List Address: %d\n", data[2]);
-				printf("Empty Spot: %d\n", data[3]);
-				printf("Name: %s\n", data + 4);
-				printf("Size: %d\n", data[13]);	*/
-				//CHANGED
 				printf("INODE @ %d\n", block);
 				printf("Magic Number: %d\n", data[1]);
 				printf("Inode List Address: %d\n", data[2]);
 				printf("Empty Spot: %d\n", data[3]);
 				printf("Name: %s\n", data + 4);
-				printf("Size: %d\n", data[13]);
+				memcpy(&z, data +15, 4);
+				printf("Size: %d\n", z);
 				printf("File extents list address: %d\n", data[14]);
 			}
 		}
@@ -147,7 +142,7 @@ int tfs_mkfs(char *filename, int nBytes) {
 		diskNum = -4; //ERROR: FILESYSTEM SIZE TOO SMALL
 	else {
 		format = calloc(BLOCKSIZE, sizeof(char));
-		format[1] = 45;
+		format[1] = 0x45;
 
 		//Format Superblock
 		format[0] = 1; //Block type
@@ -160,8 +155,13 @@ int tfs_mkfs(char *filename, int nBytes) {
 		format[2] = -1; //Pointer to list of Inodes
 		format[4] = '/'; //Name
 		format[5] = '\0'; //Null char
-		format[13] = 0; //File size
-		format[14] = -1; //Pointer to list of file extents	
+		format[13] = 0; //empty
+		format[14] = -1; //Pointer to list of file extents
+		format[15] = 0;
+		format[16] = 0;
+		format[17] = 0;
+		format[18] = 0; //15, 16, 17, 18 is int for size	
+		//TODO: cast to characters!!!
 		writeBlock(diskNum, 1, format);
 
 		//Set block to Free Block format	
@@ -454,6 +454,8 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 	int ind = 0;
 	int found = 0;
 
+	if (size >= BLOCKSIZE) 
+		status = -1; //break
 	//make sure the file is open
 	if(fileList == NULL) {
 		//TODO: set error, for file not opened yet.
@@ -474,9 +476,9 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 		//get the inode to get address
 		readBlock(diskNum, FD, block);  //block = inode
 		int freeind = getFreeBlock();
-		block[13] = size;  //TODO: can size only be char???
-		printf("wrote size as %d to %d\n", size, FD);
-		block[14] = freeind;  //inode[14] points to file extents
+		memcpy(block + 15, &size, sizeof(unsigned int));
+		//printf("wrote size as %u to %d\n", (unsigned char)block[13], FD);
+		block[14] = (unsigned char) freeind;  //inode[14] points to file extents
 		writeBlock(diskNum, FD, block); //set pointer in inode to next data block
 		file->filepointer = 0;
 		int ind;
@@ -550,11 +552,12 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	//file holds filepointer...maybe move to inode?  oh well
 	//get which file extent:
 	int ext = file->filepointer / (BLOCKSIZE - 4); //which extent to go to
-	int extind = file->filepointer - (BLOCKSIZE - 4) * ext;  //index into the correct extent
+	int extind = (file->filepointer - (BLOCKSIZE - 4) * ext) + 4;  //index into the correct extent
 	readBlock(diskNum, FD, block);  //block = inode
-	//printf("filepointer: %d", file->filepointer);
-	//printf("size: %d", block[13]);
-	if (block[13] <= file->filepointer)  
+
+	int z;
+	memcpy(&z, block +15, 4);
+	if (z <= file->filepointer)  
 		status = -1;
 	else {
 		int nextext = block[14]; //points to first extent
@@ -568,9 +571,6 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 		//read in correct extent
 		readBlock(diskNum, nextext, block);
 		memcpy(buffer, block + extind, 1);
-		printf("filepointer: %d\n", file->filepointer);
-		printf("byte: %d\n", block[extind]);
-		printf("\n");
 		file->filepointer++;
 	}
 
