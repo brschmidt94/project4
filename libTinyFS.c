@@ -21,7 +21,7 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size); //K *set errors fo
 //K *check todos: need diskNum saved in mount
 int tfs_deleteFile(fileDescriptor FD); //B
 int tfs_readByte(fileDescriptor FD, char *buffer); //K *need filepointer to be set to -1 in openFile
-int tfs_seek(fileDescriptor FD, int offset); //B
+int tfs_seek(fileDescriptor FD, int offset); //B - 
 int verifyFormat(int filename); //K *check logic
 int getFreeBlock();
 int findFile(char *name);
@@ -575,4 +575,92 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	}
 
 	return status;
+}
+
+//change the inode pointer to point to the offset instead of the first file extent
+int tfs_seek(fileDescriptor FD, int offset) {
+	struct openFile *file = fileList;
+	int status = -25; //File not found!
+	int foundFile = 0;
+	
+	if(file == NULL)
+		status = -8; //ERROR: File empty on seek()
+	else {
+		while(!foundFile && file) {
+			if(file->fd == FD) {
+				foundFile = 1;
+				status = 0;
+				
+				file->filepointer += offset;
+			}
+			else
+				file = file->next;
+		}
+	}
+	
+	return status		
+}
+
+int tfs_deleteFile(fileDescriptor FD) {
+	struct openFile *file = fileList;
+	char *block = calloc(sizeof(char), BLOCKSIZE);
+	int status = -25; //File not found!
+	int foundFile = 0;
+	
+	if(file == NULL)
+		status = -9; //ERROR: File empty on sdelete()
+	else {
+		while(!foundFile && file) {
+			if(file->fd == FD) {
+				foundFile = 1;
+				status = 0;
+				
+			
+				
+				
+				
+				//Change root inode
+				//Start at root inode
+				
+				
+				readBlock(diskNum, 1, block);
+				
+				
+				
+				//Change superblock
+				
+				
+				
+				//Change free blocks
+				
+				
+				//Change file extents 
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+			}
+			else
+				file = file->next;
+		}
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 }
