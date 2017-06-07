@@ -104,6 +104,12 @@ int main(int argc, char** argv) {
 		}
 		if (tfs_deleteFile(fd2) == -20)
 			printf("ERROR: TRIED DELETING RO\n");
+
+		tfs_makeRW("stuff");
+		if (tfs_writeFile(fd2, buffer2, 5) == 0) {
+			printf("GOOD JOB WRITING TO RW\n");
+		}
+
 		printDiagnostics(diskNum);
 		tfs_readdir();
 		tfs_unmount();
@@ -610,8 +616,32 @@ int tfs_makeRO(char *name) {
 }
 
 int tfs_makeRW(char *name) {
-	int status = 0;
-
+	char *block = calloc(sizeof(char), BLOCKSIZE);
+	int foundFile = 0;
+	int blockNum = 1;
+	int nextInode = 0;
+	int status = -1;
+	
+	readBlock(diskNum, 1, block); //read root inode
+	
+	while(!foundFile) {			
+		if(strcmp(block + 4, name) == 0) {
+			foundFile = 1;
+			
+			block[13] = (char) 1;
+			writeBlock(diskNum, nextInode, block);
+			
+			status = 0;
+		}
+		else {
+			if((nextInode = block[2]) != -1)
+				readBlock(diskNum, nextInode, block);
+			else {
+				foundFile = 1;
+				status = -12; //ERROR: File does not exist!
+			}
+		}
+	}
 	return status;
 }
 
