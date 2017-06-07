@@ -26,6 +26,10 @@ int getFreeBlock();
 int findFile(char *name);
 void printDiagnostics(int diskNum);
 
+int tfs_makeRO(char *name);
+int tfs_makeRW(char *name);
+int tfs_writeByte(fileDescriptor FD, unsigned int data);
+
 //This is a dynamically allocated linked list of currently open files.
 struct openFile {
 	fileDescriptor fd; //The absolute index of an inode on the FS
@@ -78,19 +82,28 @@ int main(int argc, char** argv) {
 
 		struct openFile *file = fileList;
 
-		tfs_writeFile(fd2, buffer2, 5);
+		int wr = tfs_writeFile(fd2, buffer2, 5);
 		for (i = 0; i < 5; i++) {
 			tfs_readByte(fd2, buf);
 			printf("%hhx ", buf[0]);
 		}
 		tfs_deleteFile(fd2);
+
 		printf("\n");
 		//TODO: deleting multiple files doesn't work...also, open file twice...
 		//tfs_deleteFile(fd2);
 
 		//tfs_deleteFile(fd);
 
+		tfs_rename("cats", "meow");
 
+		fd2 = tfs_openFile("stuff");
+		tfs_makeRO("stuff");
+		if (tfs_writeFile(fd2, buffer2, 5) == -20) {
+			printf("ERROR: TRIED WRITING TO RO\n");
+		}
+		if (tfs_deleteFile(fd2) == -20)
+			printf("ERROR: TRIED DELETING RO\n");
 		printDiagnostics(diskNum);
 		tfs_readdir();
 		tfs_unmount();
@@ -184,6 +197,7 @@ int tfs_mkfs(char *filename, int nBytes) {
 		format[4] = '/'; //Name
 		format[5] = '\0'; //Null char
 		format[13] = (char) 0; //Permissions byte. value accroding to R, W, RW
+		//ro = 0, rw = 1
 		format[14] = (char) -1; //Pointer to list of file extents
 		format[15] = (char) 0;
 		format[16] = (char) 0;
@@ -357,7 +371,7 @@ int findFile(char *name) {
 			
 			//SET PERMS		
 			//////////////////////////////////
-			block[13] = 0; //Permissions byte 
+			block[13] = (char) 1; //Permissions byte RW
 			/////////////////////////////////
 			
 			//Zero out data from before
@@ -507,7 +521,12 @@ void tfs_readdir() {
 		readBlock(diskNum, block[2], block);
 		
 		while(!done) {
-			printf("%s - %d bytes\n", block + 15, block[4]);
+			//printf("%s - %d bytes\n", block + 15, block[4]);
+			//CHANGED
+			// get size of file in bytes
+			int z;
+			memcpy(&z, block +15, 4);
+			printf("%s - %d bytes\n", block + 4, z);
 			printf("Created: %s\n", block + 19);
 
 
@@ -518,6 +537,7 @@ void tfs_readdir() {
 		}
 	}	
 }
+
 
 
 
@@ -559,7 +579,47 @@ void tfs_readFileInfo(fileDescriptor FD) {
 
 //////////////////////// KIRSTEN
 
+int tfs_makeRO(char *name) {
+	char *block = calloc(sizeof(char), BLOCKSIZE);
+	int foundFile = 0;
+	int blockNum = 1;
+	int nextInode = 0;
+	int status = -1;
+	
+	readBlock(diskNum, 1, block); //read root inode
+	
+	while(!foundFile) {			
+		if(strcmp(block + 4, name) == 0) {
+			foundFile = 1;
+			
+			block[13] = (char) 0;
+			writeBlock(diskNum, nextInode, block);
+			
+			status = 0;
+		}
+		else {
+			if((nextInode = block[2]) != -1)
+				readBlock(diskNum, nextInode, block);
+			else {
+				foundFile = 1;
+				status = -12; //ERROR: File does not exist!
+			}
+		}
+	}
+	return status;
+}
 
+int tfs_makeRW(char *name) {
+	int status = 0;
+
+	return status;
+}
+
+int tfs_writeByte(fileDescriptor FD, unsigned int data) {
+	int status = 0;
+
+	return status;
+}
 
 
 
@@ -683,42 +743,46 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 		//printf("FOUND write file\n");
 		//get the inode to get address
 		readBlock(diskNum, FD, block);  //block = inode
-		int freeind = getFreeBlock();
-		memcpy(block + 15, &size, sizeof(unsigned int));
-		//printf("wrote size as %u to %d\n", (unsigned char)block[13], FD);
-		block[14] = (unsigned char) freeind;  //inode[14] points to file extents
-		writeBlock(diskNum, FD, block); //set pointer in inode to next data block
-		file->filepointer = 0;
-		int ind;
-		int last = 0;
-		//round up division?
-		for (ind = 0; ind < ((size + (BLOCKSIZE - 4) - 1) / (BLOCKSIZE - 4)); ind++) {
-			if (ind == ((size + (BLOCKSIZE - 4) - 1) / (BLOCKSIZE - 4)) - 1)
-				last = 1;
+		if (block[13]) {
+			int freeind = getFreeBlock();
+			memcpy(block + 15, &size, sizeof(unsigned int));
+			//printf("wrote size as %u to %d\n", (unsigned char)block[13], FD);
+			block[14] = (unsigned char) freeind;  //inode[14] points to file extents
+			writeBlock(diskNum, FD, block); //set pointer in inode to next data block
+			file->filepointer = 0;
+			int ind;
+			int last = 0;
+			//round up division?
+			for (ind = 0; ind < ((size + (BLOCKSIZE - 4) - 1) / (BLOCKSIZE - 4)); ind++) {
+				if (ind == ((size + (BLOCKSIZE - 4) - 1) / (BLOCKSIZE - 4)) - 1)
+					last = 1;
 
-			readBlock(diskNum, freeind, block);  //read free block
+				readBlock(diskNum, freeind, block);  //read free block
 
-			if (last) {
-				block[0] = 3;
-				block[2] = -1;
-				block[3] = 0;
-				//write data
-				memcpy(block + 4, ind *(BLOCKSIZE - 4) + buffer, size - (BLOCKSIZE - 4) * ind);
-				writeBlock(diskNum, freeind, block);
-			} else {
-				int  nextind = getFreeBlock();
-				block[0] = 3;
-				block[2] = nextind;
-				block[3] = 0;
-				memcpy(block + 4, ind *(BLOCKSIZE - 4) + buffer, BLOCKSIZE - 4);
-				writeBlock(diskNum, freeind, block);
-				freeind = nextind;
-			}
+				if (last) {
+					block[0] = 3;
+					block[2] = -1;
+					block[3] = 0;
+					//write data
+					memcpy(block + 4, ind *(BLOCKSIZE - 4) + buffer, size - (BLOCKSIZE - 4) * ind);
+					writeBlock(diskNum, freeind, block);
+				} else {
+					int  nextind = getFreeBlock();
+					block[0] = 3;
+					block[2] = nextind;
+					block[3] = 0;
+					memcpy(block + 4, ind *(BLOCKSIZE - 4) + buffer, BLOCKSIZE - 4);
+					writeBlock(diskNum, freeind, block);
+					freeind = nextind;
+				}
 
 				
 			//SET MODIFIED TIME HERE
 
 
+			}
+		} else {
+			status = -20; //TRIED TO MODIFY RO FILE
 		}
 
 	} else {
@@ -807,54 +871,6 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	return status;
 }
 
-//kkkkk
-/*
-int tfs_deleteFile(fileDescriptor FD) {
-	struct openFile *file = fileList;
-	char *prev = calloc(sizeof(char), BLOCKSIZE);
-	char *next = calloc(sizeof(char), BLOCKSIZE);
-	int status = -25; //File not found!
-	int foundFile = 0;
-	
-	if(file == NULL)
-		status = -9; //ERROR: File empty on sdelete()
-	else {
-		while(!foundFile && file) {
-			if(file->fd == FD) {
-				foundFile = 1;
-				status = 0;
-				
-	
-	
-	
-	
-				
-				//Change root inode
-				//Start at root inode	
-				//readBlock(diskNum, 1, block);
-				
-				while(!foundFile) {			
-					if(strcmp(block + 4, name) == 0)
-						foundFile = 1;
-					else {
-						nextInode = block[2];
-						readBlock(diskNum, nextInode, block);
-					}
-				}
-				
-				//Change superblock
-							
-				//Change free blocks
-				
-				//Change file extents 
-					
-			}
-			else
-				file = file->next;
-		}
-	}
-}*/
-
 /*
  *
  */
@@ -907,38 +923,41 @@ int tfs_deleteFile(fileDescriptor FD) {
 		}
 	} while (file != NULL && !found);
 
-	//delete file if it is actually opened
 	if (found) {
 		status = 0;
 
 		//set file extents free (updates superblock pointer too)
 		readBlock(diskNum, FD, inode);
-		int extind = inode[14];
+		if (inode[13]) {
+			int extind = inode[14];
 
-		do {
-			readBlock(diskNum, extind, extent);
-			int temp = extind; //index of extent to free
-			extind = extent[2]; //save next location of extent
-			setFreeBlock(temp);
-		} while (extind != -1);
+			do {
+				readBlock(diskNum, extind, extent);
+				int temp = extind; //index of extent to free
+				extind = extent[2]; //save next location of extent
+				setFreeBlock(temp);
+			} while (extind != -1);
 
-		//set inode free (update inode linked list (assumes that linked list matches actual list order...))
-		readBlock(diskNum, 1, rootinode);
-		if (prevfile == NULL) { //first one is file in list
-			rootinode[2] = inode[2]; //point superblock to what inode used to point to
-			setFreeBlock(FD); //free inode
-			writeBlock(diskNum, 1, rootinode);
-			//update dynamically allocated linked list
-			if (fileList->next == NULL) 
-				fileList == NULL;
-			else
-				fileList = file->next;
-		} else { //file is in middle or end...
-			readBlock(diskNum, prevfile->fd, previnode);
-			previnode[2] = inode[2];
-			setFreeBlock(FD);
-			writeBlock(diskNum, prevfile->fd, previnode);
-			prevfile->next = file->next;
+			//set inode free (update inode linked list (assumes that linked list matches actual list order...))
+			readBlock(diskNum, 1, rootinode);
+			if (prevfile == NULL) { //first one is file in list
+				rootinode[2] = inode[2]; //point superblock to what inode used to point to
+				setFreeBlock(FD); //free inode
+				writeBlock(diskNum, 1, rootinode);
+				//update dynamically allocated linked list
+				if (fileList->next == NULL) 
+					fileList == NULL;
+				else
+					fileList = file->next;
+			} else { //file is in middle or end...
+				readBlock(diskNum, prevfile->fd, previnode);
+				previnode[2] = inode[2];
+				setFreeBlock(FD);
+				writeBlock(diskNum, prevfile->fd, previnode);
+				prevfile->next = file->next;
+			}
+		} else {
+			status = -20; //tried to modify ro file
 		}
 	}
 
