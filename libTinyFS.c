@@ -65,6 +65,26 @@ int main(int argc, char** argv) {
 	}
 	printf("\n");
 
+	//tfs_deleteFile(fd);
+
+	int fd2;
+	char *buffer2 =  calloc(BLOCKSIZE, sizeof(char));
+	for (i = 0; i < 5; i++) {
+		buffer2[i] = 12;
+	}
+	fd2 = tfs_openFile("dogs");
+	tfs_writeFile(fd2, buffer2, 5);
+	for (i = 0; i < 5; i++) {
+		tfs_readByte(fd2, buf);
+		printf("%hhx ", buf[0]);
+	}
+	printf("\n");
+	//TODO: deleting multiple files doesn't work...also, open file twice...
+	//tfs_deleteFile(fd2);
+
+	//tfs_deleteFile(fd);
+
+
 	printDiagnostics(diskNum);
 	tfs_readdir();
 	tfs_unmount();
@@ -824,5 +844,99 @@ int tfs_deleteFile(fileDescriptor FD) {
 				file = file->next;
 		}
 	}
+}*/
+
+/*
+ *
+ */
+int setFreeBlock(int bnum) {
+	int freeBlockIndex = -1;
+	char *superBlock = calloc(sizeof(char), BLOCKSIZE);
+	char *newFree = calloc(sizeof(char), BLOCKSIZE);
+	int freeBlock;
+	
+	readBlock(diskNum, 0, superBlock); //Read in superblock
+	
+
+	readBlock(diskNum, bnum, newFree);
+
+	newFree[2] = superBlock[4];  //new free block points to what superblock used to
+	superBlock[4] = bnum; //superbloc points to new block
+	newFree[0] = (char) 4;  //set type of block
+	writeBlock(diskNum, bnum, newFree);
+	writeBlock(diskNum, 0, superBlock);	
+	
+	
+	free(superBlock);
+	free(newFree);
+	
+	return freeBlock; //We return the absolute index of the freeblock
 }
+/*
+ * Deletes a file and marks its blocks as free on a disk.
 */
+int tfs_deleteFile(fileDescriptor FD) {
+	struct openFile *file = fileList;
+	struct openFile *prevfile = NULL;
+	char *inode = calloc(sizeof(char), BLOCKSIZE);
+	char *extent = calloc(sizeof(char), BLOCKSIZE);
+	char *rootinode = calloc(sizeof(char), BLOCKSIZE);
+	char *previnode = calloc(sizeof(char), BLOCKSIZE);
+	int status = -25; //File not found!
+	int found = 0;
+	
+	if(file == NULL)
+		status = -9; //ERROR: File empty on sdelete()
+
+	//grab file from dynamically allocated linked list of open files
+	do {
+		if (file->fd == FD) {
+			found = 1;
+		} else {
+			prevfile = file;
+			file = file->next;
+		}
+	} while (file->next != NULL && !found);
+
+	//delete file if it is actually opened
+	if (found) {
+		status = 0;
+
+		//set file extents free (updates superblock pointer too)
+		readBlock(diskNum, FD, inode);
+		int extind = inode[14];
+
+		do {
+			readBlock(diskNum, extind, extent);
+			int temp = extind; //index of extent to free
+			extind = extent[2]; //save next location of extent
+			setFreeBlock(temp);
+		} while (extind != -1);
+
+		//set inode free (update inode linked list (assumes that linked list matches actual list order...))
+		readBlock(diskNum, 1, rootinode);
+		if (prevfile == NULL) { //first one is file in list
+			rootinode[2] = inode[2]; //point superblock to what inode used to point to
+			setFreeBlock(FD); //free inode
+			writeBlock(diskNum, 1, rootinode);
+			//update dynamically allocated linked list
+			if (fileList->next == NULL) 
+				fileList == NULL;
+			else
+				fileList = file->next;
+		} else { //file is in middle or end...
+			readBlock(diskNum, prevfile->fd, previnode);
+			previnode[2] = inode[2];
+			setFreeBlock(FD);
+			writeBlock(diskNum, prevfile->fd, previnode);
+			prevfile->next = file->next;
+		}
+	}
+
+	free(extent);
+	free(inode);
+	free(rootinode);
+	free(previnode);
+
+	return status;
+}
