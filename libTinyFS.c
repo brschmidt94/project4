@@ -495,8 +495,30 @@ void tfs_readdir() {
 
 
 void tfs_readFileInfo(fileDescriptor FD) {
+	char *block = (char *) calloc(sizeof(char), BLOCKSIZE);
+	struct openFile *file = fileList;
+	int foundFile = 1;
+	int status = 0;
 	
+	if(file == NULL)
+		status = -8; //ERROR: File empty on seek()
+	else {
+		while(!foundFile && file) {
+			if(file->fd == FD) {
+				foundFile = 1;
+					
+				readBlock(diskNum, file->fd, block);
+				printf("%s - %d bytes\n", block + 15, block[4]);
+				printf("Created: %s\n", block + 19);
+				printf("Modified: %s\n", block + 45);
+				printf("Accessed: %s\n", block + 71);				
+			}
+			else
+				file = file->next;
+		}
+	}
 	
+	free(block);
 }
 
 
