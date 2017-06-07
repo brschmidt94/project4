@@ -545,9 +545,6 @@ void tfs_readdir() {
 }
 
 
-
-
-
 void tfs_readFileInfo(fileDescriptor FD) {
 	char *block = (char *) calloc(sizeof(char), BLOCKSIZE);
 	struct openFile *file = fileList;
@@ -574,12 +571,6 @@ void tfs_readFileInfo(fileDescriptor FD) {
 	
 	free(block);
 }
-
-
-
-
-
-
 
 
 
@@ -665,22 +656,6 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data) {
 
 ///////////////////////////////////////////
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /*
  * Pass in the fd of the file system being mounted.  The file has been opened, but must 
  * have 0x45 as the magic number in each block to be mounted.
@@ -696,47 +671,51 @@ int verifyFormat(int diskNum) {
 	validRead = readBlock(diskNum, 0, buff); // read in superblock
 
 	//verify magic number is in each block
-	if (validRead < 0 || buff[1] != 0x45)  //if reading superblock  doesn't cause error
-		ret = -1;
-
-	return ret;
-}
+	if (buff[1] == 0x45) { //if reading superblock  doesn't cause error
+		ret = 0;
+//	return ret;
+//}
 		//save index of free blocks
-		/*int freeind = buff[4];
+		int freeind = buff[4];
 
 		//verify inodes and file extents 
 		//(block 2 (third block in) points to inodes)
 		//block 14 in inodes points to file extents
 		while (buff[2] != -1) { //loop through inodes
-			validRead = readBlock(diskNum, buff[2], buff);
-			if (validRead < 0 || buff[1] != 0x45)
-				return -1;
+			readBlock(diskNum, buff[2], buff);
+			if (buff[1] != 0x45)
+				ret = -1;
 
 			//buff has inode
-			validRead = readBlock(diskNum, buff[14], extents);
-			if (validRead < 0 && extents[1] != 0x45) 
-				return -1;
+			if (buff[14] != -1) {
+				readBlock(diskNum, buff[14], extents);
+				if (extents[1] != 0x45) 
+					ret =  -1;
 
-			while (extents[14] != -1) {  //loop through file extents
-				validRead = readBlock(diskNum, extents[2], extents); //TODO: is 2 right index???
-				if (validRead < 0 || extents[1] != 0x45)
-					return -1;
+				while (extents[2] != -1) {  //loop through file extents
+					validRead = readBlock(diskNum, extents[2], extents); //TODO: is 2 right index???
+					if (extents[1] != 0x45)
+						ret = -1;
+				}
 			}
-			
+	
 		}
 
 		//verify free blocks
-		validRead = readBlock(diskNum, freeind, buff);
-		if (validRead < 0 && buff[1] != 0x45) 
-			return -1;
+		readBlock(diskNum, freeind, buff);
+		if (buff[1] != 0x45) 
+			ret = -1;
 		while (buff[2] != -1) {
-			if (validRead < 0 || buff[1] != 0x45)
+			if (buff[1] != 0x45)
 				return -1;
-
+			readBlock(diskNum, buff[2], buff);
 		}
 
 	} else 
-		ret = -1;*/
+		ret = -1;
+
+	return ret;
+}
 	
 
 
