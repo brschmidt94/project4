@@ -53,41 +53,49 @@ int main(int argc, char** argv) {
 		buffer[i] = i;
 	}
 
-	tfs_mount(DEFAULT_DISK_NAME);
-	
-	fd = tfs_openFile("cats");
-	tfs_writeFile(fd, buffer, 256);  //should take up 2 free blocks because extra bytes in beginning
+	int mountcheck = tfs_mount(DEFAULT_DISK_NAME);
 
-	char *buf = calloc(1, sizeof(char));
-	for (i = 0; i < 256; i++) {
-		tfs_readByte(fd, buf);
-		printf("%hhx ", buf[0]);
-	}
-	printf("\n");
+	if (mountcheck >=0) {
+		
+		fd = tfs_openFile("cats");
+		tfs_writeFile(fd, buffer, 256);  //should take up 2 free blocks because extra bytes in beginning
 
-	//tfs_deleteFile(fd);
+		char *buf = calloc(1, sizeof(char));
+		for (i = 0; i < 256; i++) {
+			tfs_readByte(fd, buf);
+			printf("%hhx ", buf[0]);
+		}
+		printf("\n");
 
-	int fd2;
-	char *buffer2 =  calloc(BLOCKSIZE, sizeof(char));
-	for (i = 0; i < 5; i++) {
-		buffer2[i] = 12;
-	}
-	fd2 = tfs_openFile("dogs");
-	tfs_writeFile(fd2, buffer2, 5);
-	for (i = 0; i < 5; i++) {
-		tfs_readByte(fd2, buf);
-		printf("%hhx ", buf[0]);
-	}
-	printf("\n");
-	//TODO: deleting multiple files doesn't work...also, open file twice...
-	//tfs_deleteFile(fd2);
+		//tfs_deleteFile(fd);
 
-	//tfs_deleteFile(fd);
+		int fd2;
+		char *buffer2 =  calloc(BLOCKSIZE, sizeof(char));
+		for (i = 0; i < 5; i++) {
+			buffer2[i] = 12;
+		}
+		fd2 = tfs_openFile("dogs");
+
+		struct openFile *file = fileList;
+
+		tfs_writeFile(fd2, buffer2, 5);
+		for (i = 0; i < 5; i++) {
+			tfs_readByte(fd2, buf);
+			printf("%hhx ", buf[0]);
+		}
+		tfs_deleteFile(fd2);
+		printf("\n");
+		//TODO: deleting multiple files doesn't work...also, open file twice...
+		//tfs_deleteFile(fd2);
+
+		//tfs_deleteFile(fd);
 
 
-	printDiagnostics(diskNum);
-	tfs_readdir();
-	tfs_unmount();
+		printDiagnostics(diskNum);
+		tfs_readdir();
+		tfs_unmount();
+	} else 
+		printf("bad mount\n");
 
 	return 0;
 }
@@ -101,7 +109,7 @@ void printDiagnostics(int diskNum) {
 		
 		if(data[0] == 1) {
 			printf("SUPERBLOCK @ %d\n", block);
-			printf("Magic Number: %d\n", data[1]);
+			printf("Magic Number: 0x%x\n", data[1]);
 			printf("Root Inode Address: %d\n", data[2]);
 			printf("Empty Spot: %d\n", data[3]);
 			printf("Free block address: %d\n", data[4]);
@@ -109,7 +117,7 @@ void printDiagnostics(int diskNum) {
 		else if(data[0] == 2) {
 			if(data[4] == '/') {
 				printf("ROOT INODE @ %d\n", block);
-				printf("Magic Number: %d\n", data[1]);
+				printf("Magic Number: 0x%x\n", data[1]);
 				printf("Inode List Address: %d\n", data[2]);
 				printf("Empty Spot: %d\n", data[3]);
 				printf("Name: %s\n", data + 4);
@@ -119,7 +127,7 @@ void printDiagnostics(int diskNum) {
 			}
 			else {
 				printf("INODE @ %d\n", block);
-				printf("Magic Number: %d\n", data[1]);
+				printf("Magic Number: 0x%x\n", data[1]);
 				printf("Inode List Address: %d\n", data[2]);
 				printf("Empty Spot: %d\n", data[3]);
 				printf("Name: %s\n", data + 4);
@@ -130,13 +138,13 @@ void printDiagnostics(int diskNum) {
 		}
 		else if(data[0] == 3) {
 			printf("FILE EXTENT @ %d\n", block);
-			printf("Magic Number: %d\n", data[1]);
+			printf("Magic Number: 0x%x\n", data[1]);
 			printf("File Extents List Address: %d\n", data[2]); //ADDED
 			printf("Empty Spot: %d\n", data[3]);
 		}
 		else if(data[0] == 4) {
 			printf("FREE BLOCK @ %d\n", block);
-			printf("Magic Number: %d\n", data[1]);
+			printf("Magic Number: 0x%x\n", data[1]);
 			printf("Next Free Block Address: %d\n", data[2]);
 			printf("Empty Spot: %d\n", data[3]);
 		}
@@ -226,15 +234,15 @@ int tfs_mount(char *filename) {
 		status = -7; //ERROR: MAKE/MOUNT NON EXISTANT FILE 
 	else { //if the file is existant, check it is mountable (correct format)
 
-		//if(verifyFormat(status) != 0) {
-		//	closeDisk(status);
-		//	status = -8; //ERROR: TRIED TO MOUNT FILE WITH WRONG FORMAT
-		//}
+		if(verifyFormat(status) != 0) {
+			closeDisk(status);
+			status = -8; //ERROR: TRIED TO MOUNT FILE WITH WRONG FORMAT
+		} else {
+			//Set diskNum instance var and return it too
+			diskNum = status;
+			mounted = 1;
+		}
 	}
-
-	//Set diskNum instance var and return it too
-	diskNum = status;
-	mounted = 1;
 
 	return status;
 }
@@ -588,7 +596,6 @@ void tfs_readFileInfo(fileDescriptor FD) {
  * have 0x45 as the magic number in each block to be mounted.
  * Return 0 if correct format, and -1 otherwise.
  */
-/**
 int verifyFormat(int diskNum) {
 	int ret = 0;
 	char *buff = calloc(BLOCKSIZE, sizeof(char));
@@ -599,9 +606,13 @@ int verifyFormat(int diskNum) {
 	validRead = readBlock(diskNum, 0, buff); // read in superblock
 
 	//verify magic number is in each block
-	if (validRead >= 0 && buff[1] == 0x45) { //if reading superblock  doesn't cause error
+	if (validRead < 0 || buff[1] != 0x45)  //if reading superblock  doesn't cause error
+		ret = -1;
+
+	return ret;
+}
 		//save index of free blocks
-		int freeind = buff[4];
+		/*int freeind = buff[4];
 
 		//verify inodes and file extents 
 		//(block 2 (third block in) points to inodes)
@@ -633,13 +644,11 @@ int verifyFormat(int diskNum) {
 				return -1;
 
 		}
-	} else 
-		ret = -1;
-	
-	return ret;
-}
 
-*/
+	} else 
+		ret = -1;*/
+	
+
 
 /*
  * Writes buffer 'buffer' of size 'size', which represents an entire file's content, 
@@ -668,7 +677,7 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 		} else {
 			file = file->next;
 		}
-	} while (file->next != NULL && !found);
+	} while (file != NULL && !found);
 
 	if (found) {
 		//printf("FOUND write file\n");
@@ -746,7 +755,7 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 		} else {
 			file = file->next;
 		}
-	} while (file->next != NULL && !found);
+	} while (file != NULL && !found);
 
 	if (!found) 
 		status = -1;//set error...figure out details: TODO
@@ -896,7 +905,7 @@ int tfs_deleteFile(fileDescriptor FD) {
 			prevfile = file;
 			file = file->next;
 		}
-	} while (file->next != NULL && !found);
+	} while (file != NULL && !found);
 
 	//delete file if it is actually opened
 	if (found) {
