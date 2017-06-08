@@ -847,27 +847,31 @@ int tfs_deleteFile(fileDescriptor FD) {
 	char *previnode = calloc(sizeof(char), BLOCKSIZE);
 	int status = -25; //File not found!
 	int found = 0;
-	
+
 	readBlock(diskNum, 1, inode);
 	int ind;
-	while ((ind = inode[2]) != -1 && !found && inode[2] != FD) {
+	if (inode[2] == FD) //root inode
+		found = 1;
+	while ((ind = inode[2]) != -1 && !found) {
 		readBlock(diskNum, ind, inode);
 		if (inode[2] == FD) {
 			found = 1;
 			prevfile = ind;
 		}
 	}
+
 	readBlock(diskNum, FD, inode);
 	if (inode[0] != 2) {
 		found = 0;
 	}
 
 	if (found) {
-		tfs_closeFile(FD);
+		//tfs_closeFile(FD);
 		status = 0;
 
 		//set file extents free (updates superblock pointer too)
 		if (inode[13]) {
+			tfs_closeFile(FD);
 			int extind = inode[14];
 
 			do {
