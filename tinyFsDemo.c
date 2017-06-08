@@ -6,6 +6,7 @@
 #include "tinyFS.h"
 #include "TinyFS_errno.h"
 
+
 int main(int argc, char** argv) {
 	//BASIC FUNCTIONALITY
 	printf("Testing:\n\n");
@@ -32,7 +33,7 @@ int main(int argc, char** argv) {
 
 	if (mountcheck >= 0) {
 		fd = tfs_openFile("cats");
-		tfs_writeFile(fd, buffer, 300);  //should take up 2 free blocks because extra bytes in beginning
+		errorStr(tfs_writeFile(fd, buffer, 300));  //should take up 2 free blocks because extra bytes in beginning
 
 		char *buf = calloc(1, sizeof(char));
 		tfs_writeByte(fd, 11);
@@ -69,7 +70,10 @@ int main(int argc, char** argv) {
 		printf("write byte was shown above with writing bead\n");
 		printf("Set dogs to read only and try writeFile(), deleteFile(), and writeByte():\n");
 		tfs_makeRO("dogs");
-		//if (tfs_writeFile(fd))
+		errorStr(tfs_writeFile(fd, buffer, 5));
+		errorStr(tfs_deleteFile(fd));
+		errorStr(tfs_writeByte(fd, 0xD));
+
 			//printf("")
 /*
 		int fd2;

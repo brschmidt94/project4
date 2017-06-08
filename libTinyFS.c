@@ -4,7 +4,6 @@
 #include <string.h>
 #include <time.h>
 #include "libDisk.h"
-//#include "libTinyFS.h"
 #include "tinyFS.h"
 #include "TinyFS_errno.h"
 
@@ -908,4 +907,56 @@ int tfs_deleteFile(fileDescriptor FD) {
 	free(previnode);
 
 	return status;
+}
+
+//ERROR codes
+//STACK OVERFLOW STERNNO base code
+typedef struct {
+  int errorCode;
+  const char* errorString;
+} errorType;
+
+errorType errs[] = {
+  {FILESYSTEM_NOT_FOUND_OR_OF_SIZE_ZERO, "FILESYSTEM_NOT_FOUND_OR_OF_SIZE_ZERO"},
+  {MISALIGNED_BLOCKSIZE, 				 "MISALIGNED_BLOCKSIZE"},
+  {READ_FAILURE,						 "READ_FAILURE"},
+  {WRITE_ERROR,							 "WRITE_ERROR"},
+  {FILESYSTEM_TOO_SMALL,				 "FILESYSTEM_TOO_SMALL"},
+  {BAD_FILESYSTEM_FORMAT,				 "BAD_FILESYSTEM_FORMAT"},
+  {NO_FILESYSTEM_MOUNTED,				 "NO_FILESYSTEM_MOUNTED"},
+  {BAD_FILENAME_LENGTH,					 "BAD_FILENAME_LENGTH"},
+  {FILESYSTEM_IS_FULL,					 "FILESYSTEM_IS_FULL"},
+  {NO_FILES_IN_FILESYSTEM,				 "NO_FILES_IN_FILESYSTEM"},
+  {EMPTY_FILE,							 "EMPTY_FILE"},
+  {FILE_DOES_NOT_EXIST,					 "FILE_DOES_NOT_EXIST"},
+  {EXCESS_WRITE_SIZE,					 "EXCESS_WRITE_SIZE"},
+  {MODIFYING_READ_ONLY_FILE,			 "MODIFYING_READ_ONLY_FILE"},
+  {FILE_NOT_OPENED,						 "FILE_NOT_OPENED"},
+  {READING_BEYOND_END_OF_FILE,			 "READING_BEYOND_END_OF_FILE"},
+  {FILENAME_TOO_LONG,					 "FILENAME_TOO_LONG"},
+  {FILE_NOT_FOUND,						 "FILE_NOT_FOUND"},
+  {0,           "NULL"           },
+};
+
+int errorStr(int errorValue) {
+  int i = 0;
+  int found = 0;
+  while (errs[i].errorCode != 0) {
+    if(errs[i].errorCode == errorValue && errorValue != 0) {
+      //Found the correct error index value
+      found = 1;
+      break;
+    }
+    i++;
+  }
+  if(found) {
+    printf("Error number: %d (%s)\n",errs[i].errorCode, errs[i].errorString);
+  } else {
+    printf("No Error\n");
+  }
+  if(found) {
+    return i;
+  } else {
+    return -1;
+  }
 }
