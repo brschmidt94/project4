@@ -25,7 +25,7 @@ int verifyFormat(int filename); //K *check logic
 int getFreeBlock();
 int findFile(char *name);
 void printDiagnostics(int diskNum);
-
+void tfs_readFileInfo(fileDescriptor FD);
 int tfs_makeRO(char *name);
 int tfs_makeRW(char *name);
 int tfs_writeByte(fileDescriptor FD, unsigned int data);
@@ -52,10 +52,10 @@ struct tm* tm_info;
 int main(int argc, char** argv) {
 	int disk = tfs_mkfs(DEFAULT_DISK_NAME, DEFAULT_BLOCK_SIZE);
 	fileDescriptor fd;
+
+	char *buffer =  calloc(300, sizeof(char));
 	int i;
-	
-	char *buffer =  calloc(BLOCKSIZE, sizeof(char));
-	for (i = 0; i < BLOCKSIZE; i++) {
+	for (i = 0; i < 300; i++) {
 		buffer[i] = i;
 	}
 
@@ -63,17 +63,27 @@ int main(int argc, char** argv) {
 
 	if (mountcheck >= 0) {
 		fd = tfs_openFile("cats");
-		tfs_writeFile(fd, buffer, 256);  //should take up 2 free blocks because extra bytes in beginning
+		tfs_writeFile(fd, buffer, 300);  //should take up 2 free blocks because extra bytes in beginning
 
 		char *buf = calloc(1, sizeof(char));
-		for (i = 0; i < 256; i++) {
+		tfs_writeByte(fd, 11);
+		tfs_writeByte(fd, 0xE);
+		tfs_writeByte(fd, 0xA);
+		tfs_writeByte(fd, 0xD);
+		tfs_seek(fd, 0);
+
+		//delay by 1 min
+    	unsigned int retTime = time(0) + 10;   // Get finishing time.
+    	while (time(0) < retTime);               // Loop until it arrives.
+		
+		for (i = 0; i < 300; i++) {
 			tfs_readByte(fd, buf);
 			printf("%hhx ", buf[0]);
 		}
 		printf("\n");
 
 		//tfs_deleteFile(fd);
-
+		//tfs_readFileInfo(fd);
 		int fd2;
 		char *buffer2 =  calloc(BLOCKSIZE, sizeof(char));
 		for (i = 0; i < 5; i++) {
@@ -113,6 +123,7 @@ int main(int argc, char** argv) {
 
 		//printDiagnostics(diskNum);
 		tfs_readdir();
+		tfs_readFileInfo(fd);
 		tfs_unmount();
 	} else 
 		printf("bad mount\n");
@@ -450,7 +461,8 @@ int tfs_seek(fileDescriptor FD, int offset) {
 				foundFile = 1;
 				status = 0;
 				
-				file->filepointer += offset;
+				//CHANGED file->filepointer += offset;
+				file->filepointer = offset;
 			}
 			else
 				file = file->next;
@@ -533,8 +545,10 @@ void tfs_readFileInfo(fileDescriptor FD) {
 	int foundFile = 0;
 	int status = 0;
 	
-	if(file == NULL)
+	if(file == NULL) {
+		printf("no files\n");
 		status = EMPTY_FILE;
+	}
 	else {
 		while(!foundFile && file) {
 			if(file->fd == FD) {
@@ -624,9 +638,76 @@ int tfs_makeRW(char *name) {
 
 int tfs_writeByte(fileDescriptor FD, unsigned int data) {
 	int status = 0;
+	char *block = calloc(sizeof(char), BLOCKSIZE);
+	struct openFile *file = fileList;
+	int ind = 0;
+	int found = 0;
+	time(&timer);
+	//make sure the file is open
+	if(fileList == NULL) {
+		status = -12; //file does not exist
+	} 
+
+	do {
+		if (file->fd == FD) {
+			found = 1;
+		} else {
+			file = file->next;
+		}
+	} while (file != NULL && !found);
+
+	if (found) {
+		//get which file extent:
+		int ext = file->filepointer / (BLOCKSIZE - 4); //which extent to go to
+		int extind = (file->filepointer - (BLOCKSIZE - 4) * ext) + 4;  //index into the correct extent
+		readBlock(diskNum, FD, block);  //block = inode
+
+		//update modified time
+		tm_info = localtime(&timer);
+		strftime(block + 45, 26, "%H:%M:%S", tm_info);
+		writeBlock(diskNum, FD, block);
+
+		int z;
+		memcpy(&z, block +15, 4);
+		if (z <= file->filepointer)  
+			status = -1;
+		else {
+			int nextext = block[14]; //points to first extent
+
+			int i;
+			//get index to correct extent
+			for (i = 0; i < ext; i++) {
+				readBlock(diskNum, nextext, block);
+				nextext = block[2];
+			}
+	
+			//read in correct extent and write data
+			readBlock(diskNum, nextext, block);
+			block[extind] = (char) data; 
+			writeBlock(diskNum, nextext, block);
+			file->filepointer++;
+		}
+
+	} else {
+		status = -12; //file does not exist
+	}
 
 	return status;
 }
+
+
+
+
+
+
+
+
+
+//READ ONLY AND WRITEBYTE SUPPORT GOES HERE
+
+
+
+///////////////////////////////////////////
 
 /*
  * Pass in the fd of the file system being mounted.  The file has been opened, but must 
@@ -643,47 +724,51 @@ int verifyFormat(int diskNum) {
 	validRead = readBlock(diskNum, 0, buff); // read in superblock
 
 	//verify magic number is in each block
-	if (validRead < 0 || buff[1] != 0x45)  //if reading superblock  doesn't cause error
-		ret = -1;
-
-	return ret;
-}
+	if (buff[1] == 0x45) { //if reading superblock  doesn't cause error
+		ret = 0;
+//	return ret;
+//}
 		//save index of free blocks
-		/*int freeind = buff[4];
+		int freeind = buff[4];
 
 		//verify inodes and file extents 
 		//(block 2 (third block in) points to inodes)
 		//block 14 in inodes points to file extents
 		while (buff[2] != -1) { //loop through inodes
-			validRead = readBlock(diskNum, buff[2], buff);
-			if (validRead < 0 || buff[1] != 0x45)
-				return -1;
+			readBlock(diskNum, buff[2], buff);
+			if (buff[1] != 0x45)
+				ret = -1;
 
 			//buff has inode
-			validRead = readBlock(diskNum, buff[14], extents);
-			if (validRead < 0 && extents[1] != 0x45) 
-				return -1;
+			if (buff[14] != -1) {
+				readBlock(diskNum, buff[14], extents);
+				if (extents[1] != 0x45) 
+					ret =  -1;
 
-			while (extents[14] != -1) {  //loop through file extents
-				validRead = readBlock(diskNum, extents[2], extents); //TODO: is 2 right index???
-				if (validRead < 0 || extents[1] != 0x45)
-					return -1;
+				while (extents[2] != -1) {  //loop through file extents
+					validRead = readBlock(diskNum, extents[2], extents); //TODO: is 2 right index???
+					if (extents[1] != 0x45)
+						ret = -1;
+				}
 			}
-			
+	
 		}
 
 		//verify free blocks
-		validRead = readBlock(diskNum, freeind, buff);
-		if (validRead < 0 && buff[1] != 0x45) 
-			return -1;
+		readBlock(diskNum, freeind, buff);
+		if (buff[1] != 0x45) 
+			ret = -1;
 		while (buff[2] != -1) {
-			if (validRead < 0 || buff[1] != 0x45)
+			if (buff[1] != 0x45)
 				return -1;
-
+			readBlock(diskNum, buff[2], buff);
 		}
 
 	} else 
-		ret = -1;*/
+			ret = -1;
+
+	return ret;
+}
 	
 
 
@@ -701,11 +786,12 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 
 	if (size >= BLOCKSIZE) 
 		status = EXCESS_WRITE_SIZE;
+
+	time(&timer);
+
 	//make sure the file is open
 	if(fileList == NULL) {
-		//TODO: set error, for file not opened yet.
-		//set status
-		printf("ERROR 1 in write file\n");
+		status = -12; //file does not exist
 	} 
 
 	do {
@@ -720,6 +806,10 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 		//printf("FOUND write file\n");
 		//get the inode to get address
 		readBlock(diskNum, FD, block);  //block = inode
+		//SET MODIFIED TIME HERE
+		tm_info = localtime(&timer);
+		strftime(block + 45, 26, "%H:%M:%S", tm_info);
+
 		if (block[13]) {
 			int freeind = getFreeBlock();
 			memcpy(block + 15, &size, sizeof(unsigned int));
@@ -753,9 +843,6 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 					freeind = nextind;
 				}
 
-				
-			//SET MODIFIED TIME HERE
-
 
 			}
 		} else
@@ -779,8 +866,9 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	char *block = calloc(sizeof(char), BLOCKSIZE);
 	struct openFile *file = fileList;
 	int found = 0;
-
+	time(&timer);
 	//make sure the file is open
+
 	if(fileList == NULL)
 		status = FILE_NOT_OPENED;
 
@@ -793,13 +881,18 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	} while (file != NULL && !found);
 
 	if (!found) 
-		status = FILE_DOES_NOT_EXIST;
+		return FILE_DOES_NOT_EXIST;//set error...figure out details: TODO
 
 	//file holds filepointer...maybe move to inode?  oh well
 	//get which file extent:
 	int ext = file->filepointer / (BLOCKSIZE - 4); //which extent to go to
 	int extind = (file->filepointer - (BLOCKSIZE - 4) * ext) + 4;  //index into the correct extent
 	readBlock(diskNum, FD, block);  //block = inode
+
+	//SET ACCESS TIME
+	tm_info = localtime(&timer);
+	strftime(block + 71, 26, "%H:%M:%S", tm_info);
+	writeBlock(diskNum, FD, block);
 
 	int z;
 	memcpy(&z, block + 15, 4);
@@ -814,25 +907,7 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 			readBlock(diskNum, nextext, block);
 			nextext = block[2];
 		}
-		
-		
-		
-		
-		
-		
-		// SET ACCESS TIME HERE
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
+				
 		//read in correct extent
 		readBlock(diskNum, nextext, block);
 		memcpy(buffer, block + extind, 1);
