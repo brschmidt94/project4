@@ -1,1 +1,38 @@
-NEED TO WRITE THIS
+Bradley Schmidt & Kirtsen Mork
+
+
+Our TinyFS meets all the basic requirements without failure 
+and follows the implementation guidelines outlined
+in the program specification.
+
+
+We chose the following additional functionalities:
+1) Directory listing and renaming
+We show how this works by creating files and calling tfs_readdir()
+after. The files in the filesystem will then be displayed. Likewise,
+we show that our renaming functionality works by renaming those files
+using tfs_rename() and calling tfs_readdir() again. These functions work
+simply by accessing/updating the name field of an inode data structure.
+
+2) Read-only and writeByte support
+We implemented this functionality by giving our inodes a permissions byte
+that can be set to the values representing RW and RO. Given the name of the file,
+both tfs_makeRO() and tfs_makeRW() will find the file specified and set the permissions
+byte according to the desired permissions level. tfs_writeByte() is supported by saving
+the offset of the current file we are examining and writing a byte to that location.
+One can test these functions by changing the permissions on a file to RO and trying to
+write to it. Secondarily, one can test tfs_writeByte() by printing out the data before
+and after writing a byte.
+
+
+3) Timestamps
+We implemented timestamps by saving 3 26-byte fields in our inodes for creation,
+modification, and access times. Creation time is set upon calling of tfs_openFile(),
+modification time is set upon calling of tfs_writeFile(), and access time is set
+upon calling tfs_readByte(). One can test this functionality by calling the
+said functions in order and printing the times after each call.
+
+
+A limitation of our filesystem is that there cannot be more than 255 blocks. This
+is because the pointers to blocks stored in inodes, file extents, and free nodes are
+1 byte big, giving them a range of 0 - 255.
