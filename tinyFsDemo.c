@@ -50,8 +50,6 @@ int main(int argc, char** argv) {
 		}
 		fd2 = tfs_openFile("dogs");
 
-		struct openFile *file = fileList;
-
 		int wr = tfs_writeFile(fd2, buffer2, 5);
 		for (i = 0; i < 5; i++) {
 			tfs_readByte(fd2, buf);
