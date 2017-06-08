@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
 		tfs_readFileInfo(fd);
 
 		//delay by 1 min
-    	unsigned int retTime = time(0) + 60;   // Get finishing time.
+    	unsigned int retTime = time(0) + 10;   // Get finishing time.
     	while (time(0) < retTime);               // Loop until it arrives.
 		
 		for (i = 0; i < 300; i++) {
@@ -659,7 +659,7 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data) {
 	struct openFile *file = fileList;
 	int ind = 0;
 	int found = 0;
-
+	time(&timer);
 	//make sure the file is open
 	if(fileList == NULL) {
 		status = -12; //file does not exist
@@ -801,6 +801,8 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 	int ind = 0;
 	int found = 0;
 
+	time(&timer);
+
 	//make sure the file is open
 	if(fileList == NULL) {
 		status = -12; //file does not exist
@@ -881,7 +883,7 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	char *block = calloc(sizeof(char), BLOCKSIZE);
 	struct openFile *file = fileList;
 	int found = 0;
-
+	time(&timer);
 	//make sure the file is open
 	if(fileList == NULL) {
 		status = -12; //file does not exist
