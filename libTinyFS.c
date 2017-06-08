@@ -557,31 +557,34 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data) {
 		int extind = (file->filepointer - (BLOCKSIZE - 4) * ext) + 4;  //index into the correct extent
 		readBlock(diskNum, FD, block);  //block = inode
 
-		//update modified time
-		tm_info = localtime(&timer);
-		strftime(block + 45, 26, "%H:%M:%S", tm_info);
-		writeBlock(diskNum, FD, block);
+		if (block[13]) {
+			//update modified time
+			tm_info = localtime(&timer);
+			strftime(block + 45, 26, "%H:%M:%S", tm_info);
+			writeBlock(diskNum, FD, block);
 
-		int z;
-		memcpy(&z, block +15, 4);
-		if (z <= file->filepointer)  
-			status = -1;
-		else {
-			int nextext = block[14]; //points to first extent
+			int z;
+			memcpy(&z, block +15, 4);
+			if (z <= file->filepointer)  
+				status = -1;
+			else {
+				int nextext = block[14]; //points to first extent
 
-			int i;
-			//get index to correct extent
-			for (i = 0; i < ext; i++) {
+				int i;
+				//get index to correct extent
+				for (i = 0; i < ext; i++) {
+					readBlock(diskNum, nextext, block);
+					nextext = block[2];
+				}
+		
+				//read in correct extent and write data
 				readBlock(diskNum, nextext, block);
-				nextext = block[2];
+				block[extind] = (char) data; 
+				writeBlock(diskNum, nextext, block);
+				file->filepointer++;
 			}
-	
-			//read in correct extent and write data
-			readBlock(diskNum, nextext, block);
-			block[extind] = (char) data; 
-			writeBlock(diskNum, nextext, block);
-			file->filepointer++;
-		}
+		} else
+			status = MODIFYING_READ_ONLY_FILE;
 
 	} else {
 		status = -12; //file does not exist
@@ -678,9 +681,6 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 	struct openFile *file = fileList;
 	int ind = 0;
 	int found = 0;
-
-	if (size >= BLOCKSIZE) 
-		status = EXCESS_WRITE_SIZE;
 
 	time(&timer);
 
