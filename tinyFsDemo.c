@@ -106,3 +106,5 @@ int main(int argc, char** argv) {
 			tfs_deleteFile(fd3);
 			tfs_readdir();			
 		}
+	}
+}

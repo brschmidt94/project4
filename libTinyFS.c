@@ -325,8 +325,8 @@ int tfs_closeFile(fileDescriptor FD) {
 			
 		while(!closed && next != NULL) {
 			if(next->fd == FD) {
-				free(next->filename);
 				prev->next = next->next;
+				free(next->filename);
 					
 				closed = 1;
 			}
@@ -585,7 +585,7 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data) {
 			status = MODIFYING_READ_ONLY_FILE;
 
 	} else {
-		status = -12; //file does not exist
+		status = -15; //file not opened
 	}
 
 	return status;
@@ -840,8 +840,7 @@ int setFreeBlock(int bnum) {
  * Deletes a file and marks its blocks as free on a disk.
 */
 int tfs_deleteFile(fileDescriptor FD) {
-	struct openFile *file = fileList;
-	struct openFile *prevfile = NULL;
+	int prevfile = 1; //root inode
 	char *inode = calloc(sizeof(char), BLOCKSIZE);
 	char *extent = calloc(sizeof(char), BLOCKSIZE);
 	char *rootinode = calloc(sizeof(char), BLOCKSIZE);
@@ -849,24 +848,25 @@ int tfs_deleteFile(fileDescriptor FD) {
 	int status = -25; //File not found!
 	int found = 0;
 	
-	if(file == NULL)
-		status = EMPTY_FILE;
-
-	//grab file from dynamically allocated linked list of open files
-	do {
-		if (file->fd == FD) {
+	readBlock(diskNum, 1, inode);
+	int ind;
+	while ((ind = inode[2]) != -1 && !found && inode[2] != FD) {
+		readBlock(diskNum, ind, inode);
+		if (inode[2] == FD) {
 			found = 1;
-		} else {
-			prevfile = file;
-			file = file->next;
+			prevfile = ind;
 		}
-	} while (file != NULL && !found);
+	}
+	readBlock(diskNum, FD, inode);
+	if (inode[0] != 2) {
+		found = 0;
+	}
 
 	if (found) {
+		tfs_closeFile(FD);
 		status = 0;
 
 		//set file extents free (updates superblock pointer too)
-		readBlock(diskNum, FD, inode);
 		if (inode[13]) {
 			int extind = inode[14];
 
@@ -879,24 +879,26 @@ int tfs_deleteFile(fileDescriptor FD) {
 
 			//set inode free (update inode linked list (assumes that linked list matches actual list order...))
 			readBlock(diskNum, 1, rootinode);
-			if (prevfile == NULL) { //first one is file in list
+			if (prevfile == 1) { //first one is file in list
 				rootinode[2] = inode[2]; //point superblock to what inode used to point to
 				setFreeBlock(FD); //free inode
 				writeBlock(diskNum, 1, rootinode);
 				//update dynamically allocated linked list
-				if (fileList->next == NULL) 
+				/*if (fileList->next == NULL) 
 					fileList = NULL;
 				else
-					fileList = file->next;
+					fileList = file->next;*/
 			} else { //file is in middle or end...
-				readBlock(diskNum, prevfile->fd, previnode);
+				readBlock(diskNum, prevfile, previnode);
 				previnode[2] = inode[2];
 				setFreeBlock(FD);
-				writeBlock(diskNum, prevfile->fd, previnode);
-				prevfile->next = file->next;
+				writeBlock(diskNum, prevfile, previnode);
+				/*prevfile->next = file->next;*/
 			}
 		} else
 				status = MODIFYING_READ_ONLY_FILE; //tried to modify ro file
+	} else {
+		status = FILE_NOT_FOUND;
 	}
 
 	free(extent);
