@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include "libDisk.h"
+#include "libTinyFS.h"
 #include "tinyFS.h"
 #include "TinyFS_errno.h"
 
