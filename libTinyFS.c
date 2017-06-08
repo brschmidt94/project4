@@ -525,7 +525,6 @@ void tfs_readdir() {
 			int z; //int we read in to avoid endianess issues
 			memcpy(&z, block +15, 4);
 			printf("%s - %d bytes\n", block + 4, z);
-			printf("Created: %s\n", block + 19);
 
 			if(block[2] == -1)
 				done = 1;
