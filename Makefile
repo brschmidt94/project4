@@ -1,7 +1,14 @@
-tinyFsDemo: libDisk.c libTinyFS.c tinyFSDemo.c
-	cc -Wall -Werror -g -c libDisk.c libTinyFS.c tinyFsDemo.c
-	
-	
+HEADERS = tinyFS.h TinyFS_errno.h libDisk.h
+OBJECTS = tinyFsDemo.o libDisk.o libTinyFS.o
 
+default: tinyFsDemo
 
+%.o: %.c $(HEADERS)
+	gcc -c $< -o $@
 
+tinyFsDemo: $(OBJECTS)
+	gcc $(OBJECTS) -o $@
+
+clean:
+	-rm -f $(OBJECTS)
+	-rm -f tinyFsDemo
