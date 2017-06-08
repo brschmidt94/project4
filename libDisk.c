@@ -9,7 +9,7 @@
 #include "libDisk.h"
 
 int openDisk(char *filename, int nBytes) {
-	FILE *disk;
+	FILE *disk = NULL;;
 	int diskNum;
 
 	if(nBytes >= 0 && nBytes % BLOCKSIZE == 0) {
