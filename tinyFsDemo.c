@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "libDisk.h"
 #include "tinyFS.h"
 #include "TinyFS_errno.h"
 #include "libTinyFS.h"
