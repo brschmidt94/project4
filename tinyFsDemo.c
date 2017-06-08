@@ -3,13 +3,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "libDisk.h"
 #include "tinyFS.h"
 #include "TinyFS_errno.h"
-#include "libTinyFS.h"
 
 int main(int argc, char** argv) {
+	//BASIC FUNCTIONALITY
+	printf("Testing:\n\n");
 	int disk = tfs_mkfs(DEFAULT_DISK_NAME, DEFAULT_BLOCK_SIZE);
+	int disk2 = tfs_mkfs("FS2", 1024);
+	printf("Making FS1 (default name and size (10,240))\n");
+	printf("Making FS2 (named 'FS2' and size 1024)\n");
+
 	fileDescriptor fd;
 
 	char *buffer =  calloc(300, sizeof(char));
@@ -18,6 +22,12 @@ int main(int argc, char** argv) {
 		buffer[i] = i;
 	}
 
+	printf("\nMOUNTING FS1\n");
+	printf("Opening and writing file: \"cats\" of 300 bytes (0-300 in hex)\n");
+	printf("Write hex BEAD to first four bytes using writeByte()\n");
+	printf("seek() back to beginning of file.\n");
+	printf("Cause a 10 second pause and call readByte() 300 times.\n");
+	printf("Bytes should read bead and then 4 to ff before it loops back to 0:\n");
 	int mountcheck = tfs_mount(DEFAULT_DISK_NAME);
 
 	if (mountcheck >= 0) {
@@ -31,6 +41,7 @@ int main(int argc, char** argv) {
 		tfs_writeByte(fd, 0xD);
 		tfs_seek(fd, 0);
 
+
 		//delay by 1 min
     	unsigned int retTime = time(0) + 10;   // Get finishing time.
     	while (time(0) < retTime);               // Loop until it arrives.
@@ -39,10 +50,28 @@ int main(int argc, char** argv) {
 			tfs_readByte(fd, buf);
 			printf("%hhx ", buf[0]);
 		}
+		printf("\n\n");
+		printf("ADDITIONAL FEATURE B (RENAME)\n");
+		printf("Renaming cats to dogs.\n");
+		tfs_rename("cats", "dogs");
+		printf("Directories should be / and dogs.\n");
+		printf("readdir() returns:\n");
+		tfs_readdir();
 		printf("\n");
 
-		//tfs_deleteFile(fd);
-		//tfs_readFileInfo(fd);
+		printf("ADDITIONAL FEATURE E (TIMESTAMPS)\n");
+		printf("File info should show the same creation and modification time.\n");
+		printf("The 300 bytes were read after the 10 second delay, so access time should differ.\n");
+		printf("tfs_readFileInfo() returns:\n");
+		tfs_readFileInfo(fd);
+
+		printf("\nADDITIONAL FEATURE D (RO and WriteByte)\n");
+		printf("write byte was shown above with writing bead\n");
+		printf("Set dogs to read only and try writeFile(), deleteFile(), and writeByte():\n");
+		tfs_makeRO("dogs");
+		//if (tfs_writeFile(fd))
+			//printf("")
+/*
 		int fd2;
 		char *buffer2 =  calloc(BLOCKSIZE, sizeof(char));
 		for (i = 0; i < 5; i++) {
@@ -55,9 +84,35 @@ int main(int argc, char** argv) {
 			tfs_readByte(fd2, buf);
 			printf("%hhx ", buf[0]);
 		}
-		tfs_deleteFile(fd2);
+		//tfs_deleteFile(fd2);
+		//tfs_deleteFile(fd);
 
 		printf("\n");
+		printf("readdir and readFileInfo for FS1\n");
+		tfs_readdir();
+		tfs_readFileInfo(fd);
+
+		printf("\nunmount FS1\n");
+		tfs_unmount();
+
+		printf("mounting second file system\n");
+		mountcheck = tfs_mount("FS2");
+
+		if (mountcheck >= 0) {
+			fd = tfs_openFile("fs2");
+			tfs_writeFile(fd, buffer, 300);  //should take up 
+			printf("SHOULD show fs2 as only file\n");
+			tfs_readdir();
+			tfs_readFileInfo(fd);
+		}
+		tfs_unmount();
+		printf("unmount fs2\n");
+		tfs_mount(DEFAULT_DISK_NAME);
+		printf("\nMounting first FS1 again:\n");
+		printf("readdir and readFileInfo for FS1 should be unchanged\n");
+		tfs_readdir();
+		tfs_readFileInfo(fd);
+		
 		//TODO: deleting multiple files doesn't work...also, open file twice...
 		//tfs_deleteFile(fd2);
 
@@ -77,11 +132,11 @@ int main(int argc, char** argv) {
 		if (tfs_writeFile(fd2, buffer2, 5) == 0) {
 			printf("GOOD JOB WRITING TO RW\n");
 		}
-
-		//printDiagnostics(diskNum);
-		tfs_readdir();
-		tfs_readFileInfo(fd);
-		tfs_unmount();
+*/
+		//printDiagnostics(disk);
+		//tfs_readdir();
+		//tfs_readFileInfo(fd);
+		//tfs_unmount();
 	} else 
 		printf("bad mount\n");
 
