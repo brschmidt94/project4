@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
 	printf("Write hex BEAD to first four bytes using writeByte()\n");
 	printf("seek() back to beginning of file.\n");
 	printf("Cause a 10 second pause and call readByte() 300 times.\n");
-	printf("Bytes should read bead and then 4 to ff before it loops back to 0:\n");
+	printf("Bytes should read bead and then 4 to ff before it loops back to 0 through 2b:\n");
 	int mountcheck = tfs_mount(DEFAULT_DISK_NAME);
 
 	if (mountcheck >= 0) {
@@ -74,75 +74,35 @@ int main(int argc, char** argv) {
 		errorStr(tfs_deleteFile(fd));
 		errorStr(tfs_writeByte(fd, 0xD));
 
-			//printf("")
-/*
-		int fd2;
-		char *buffer2 =  calloc(BLOCKSIZE, sizeof(char));
-		for (i = 0; i < 5; i++) {
-			buffer2[i] = 12;
-		}
-		fd2 = tfs_openFile("dogs");
+		printf("UNMOUNT FS1\n");
+		printf("\nMOUNT FS2\n");
 
-		int wr = tfs_writeFile(fd2, buffer2, 5);
-		for (i = 0; i < 5; i++) {
-			tfs_readByte(fd2, buf);
-			printf("%hhx ", buf[0]);
-		}
-		//tfs_deleteFile(fd2);
-		//tfs_deleteFile(fd);
-
-		printf("\n");
-		printf("readdir and readFileInfo for FS1\n");
-		tfs_readdir();
-		tfs_readFileInfo(fd);
-
-		printf("\nunmount FS1\n");
 		tfs_unmount();
-
-		printf("mounting second file system\n");
 		mountcheck = tfs_mount("FS2");
-
+		int fd2;
 		if (mountcheck >= 0) {
-			fd = tfs_openFile("fs2");
-			tfs_writeFile(fd, buffer, 300);  //should take up 
-			printf("SHOULD show fs2 as only file\n");
+			printf("Try to make an empty file named...\"emptyfile\", which is too long:\n");
+			errorStr(fd2 = tfs_openFile("emptyfile"));
+			printf("Instead make an empty file named \"EMPTY\":\n");
+			errorStr(fd2 = tfs_openFile("EMPTY"));
+			printf("Directories should be / and EMPTY (of size 0).\n");
+			printf("readdir() returns:\n");
 			tfs_readdir();
-			tfs_readFileInfo(fd);
+			printf("\n");
 		}
+
+		printf("UNMOUNT FS2\n");
 		tfs_unmount();
-		printf("unmount fs2\n");
-		tfs_mount(DEFAULT_DISK_NAME);
-		printf("\nMounting first FS1 again:\n");
-		printf("readdir and readFileInfo for FS1 should be unchanged\n");
-		tfs_readdir();
-		tfs_readFileInfo(fd);
-		
-		//TODO: deleting multiple files doesn't work...also, open file twice...
-		//tfs_deleteFile(fd2);
-
-		//tfs_deleteFile(fd);
-
-		tfs_rename("cats", "meow");
-
-		fd2 = tfs_openFile("stuff");
-		tfs_makeRO("stuff");
-		if (tfs_writeFile(fd2, buffer2, 5) == -20) {
-			printf("ERROR: TRIED WRITING TO RO\n");
+		printf("\nMOUNT FS1 AGAIN\nfiles should be as before\n\nreaddir() returns:\n");
+		int mountcheck = tfs_mount(DEFAULT_DISK_NAME);
+		if (mountcheck >= 0) {
+			tfs_readdir();
+			printf("\nMake 2 new files (\"almost\" and \"done\")\n");
+			int fd3 = tfs_openFile("almost");
+			int fd4 = tfs_openFile("done");
+			printf("readdir() returns:\n");
+			tfs_readdir();	
+			printf("\nDelete \"almost\"\nreaddir() returns:\n");
+			tfs_deleteFile(fd3);
+			tfs_readdir();			
 		}
-		if (tfs_deleteFile(fd2) == -20)
-			printf("ERROR: TRIED DELETING RO\n");
-
-		tfs_makeRW("stuff");
-		if (tfs_writeFile(fd2, buffer2, 5) == 0) {
-			printf("GOOD JOB WRITING TO RW\n");
-		}
-*/
-		//printDiagnostics(disk);
-		//tfs_readdir();
-		//tfs_readFileInfo(fd);
-		//tfs_unmount();
-	} else 
-		printf("bad mount\n");
-
-	return 0;
-}

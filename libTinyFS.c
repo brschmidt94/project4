@@ -19,7 +19,6 @@ int mounted = 0; //Indicates whether a disk is currently mounted
 int diskNum = 0; //Actual UNIX File descriptor of currently mounted file
 int diskSize = 0; //The size in bytes of the currently mounted disk
 struct openFile *fileList = NULL; //Dynamic list of open files
-//TODO KEEP TRACK OF SIZES
 
 time_t timer;
 char time_buffer[26];
@@ -64,7 +63,7 @@ void printDiagnostics(int diskNum) {
 		else if(data[0] == 3) {
 			printf("FILE EXTENT @ %d\n", block);
 			printf("Magic Number: 0x%x\n", data[1]);
-			printf("File Extents List Address: %d\n", data[2]); //ADDED
+			printf("File Extents List Address: %d\n", data[2]);
 			printf("Empty Spot: %d\n", data[3]);
 		}
 		else if(data[0] == 4) {
@@ -298,7 +297,7 @@ int getFreeBlock() {
 		freeBlock = superBlock[4]; //Save index of freeblock
 		readBlock(diskNum, freeBlock, blockToUse);
 		
-		superBlock[4] = blockToUse[2]; //Patch the gap in the Linked list  //CHANGED from 4 to 2!
+		superBlock[4] = blockToUse[2]; //Patch the gap in the Linked list  
 		writeBlock(diskNum, 0, superBlock);	
 	}
 	
@@ -355,7 +354,6 @@ int tfs_seek(fileDescriptor FD, int offset) {
 				foundFile = 1;
 				status = 0;
 				
-				//CHANGED file->filepointer += offset;
 				file->filepointer = offset;
 			}
 			else
