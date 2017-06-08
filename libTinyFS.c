@@ -91,8 +91,6 @@ int main(int argc, char** argv) {
 		}
 		fd2 = tfs_openFile("dogs");
 
-		struct openFile *file = fileList;
-
 		int wr = tfs_writeFile(fd2, buffer2, 5);
 		for (i = 0; i < 5; i++) {
 			tfs_readByte(fd2, buf);
@@ -110,10 +108,10 @@ int main(int argc, char** argv) {
 
 		fd2 = tfs_openFile("stuff");
 		tfs_makeRO("stuff");
-		if (tfs_writeFile(fd2, buffer2, 5) == -20) {
+		if (tfs_writeFile(fd2, buffer2, 5) < 0) {
 			printf("ERROR: TRIED WRITING TO RO\n");
 		}
-		if (tfs_deleteFile(fd2) == -20)
+		if (tfs_deleteFile(fd2) < 0)
 			printf("ERROR: TRIED DELETING RO\n");
 
 		tfs_makeRW("stuff");
@@ -121,7 +119,7 @@ int main(int argc, char** argv) {
 			printf("GOOD JOB WRITING TO RW\n");
 		}
 
-		//printDiagnostics(diskNum);
+		printDiagnostics(diskNum);
 		tfs_readdir();
 		tfs_readFileInfo(fd);
 		tfs_unmount();
@@ -555,7 +553,9 @@ void tfs_readFileInfo(fileDescriptor FD) {
 				foundFile = 1;
 					
 				readBlock(diskNum, file->fd, block);
-				printf("%s - %d bytes\n", block + 15, block[4]);
+				int z; //int we read in to avoid endianess issues
+				memcpy(&z, block +15, 4);
+				printf("%s - %d bytes\n", block + 4, z);
 				printf("Created: %s\n", block + 19);
 				printf("Modified: %s\n", block + 45);
 				printf("Accessed: %s\n", block + 71);				
