@@ -70,7 +70,6 @@ int main(int argc, char** argv) {
 		tfs_writeByte(fd, 0xA);
 		tfs_writeByte(fd, 0xD);
 		tfs_seek(fd, 0);
-		tfs_readFileInfo(fd);
 
 		//delay by 1 min
     	unsigned int retTime = time(0) + 10;   // Get finishing time.
@@ -547,10 +546,6 @@ void tfs_readdir() {
 			memcpy(&z, block +15, 4);
 			printf("%s - %d bytes\n", block + 4, z);
 			printf("Created: %s\n", block + 19);
-			//REMOVE LATER
-			printf("Modified: %s\n", block + 45);
-			printf("Accessed: %s\n", block + 71);
-
 
 			if(block[2] == -1)
 				done = 1;
