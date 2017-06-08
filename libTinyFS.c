@@ -29,6 +29,7 @@ void printDiagnostics(int diskNum);
 int tfs_makeRO(char *name);
 int tfs_makeRW(char *name);
 int tfs_writeByte(fileDescriptor FD, unsigned int data);
+int tfs_rename(char *name, char *newName);
 
 //This is a dynamically allocated linked list of currently open files.
 struct openFile {
@@ -51,16 +52,16 @@ struct tm* tm_info;
 int main(int argc, char** argv) {
 	int disk = tfs_mkfs(DEFAULT_DISK_NAME, DEFAULT_BLOCK_SIZE);
 	fileDescriptor fd;
-	char *buffer =  calloc(BLOCKSIZE, sizeof(char));
 	int i;
+	
+	char *buffer =  calloc(BLOCKSIZE, sizeof(char));
 	for (i = 0; i < BLOCKSIZE; i++) {
 		buffer[i] = i;
 	}
 
 	int mountcheck = tfs_mount(DEFAULT_DISK_NAME);
 
-	if (mountcheck >=0) {
-		
+	if (mountcheck >= 0) {
 		fd = tfs_openFile("cats");
 		tfs_writeFile(fd, buffer, 256);  //should take up 2 free blocks because extra bytes in beginning
 
@@ -110,7 +111,7 @@ int main(int argc, char** argv) {
 			printf("GOOD JOB WRITING TO RW\n");
 		}
 
-		printDiagnostics(diskNum);
+		//printDiagnostics(diskNum);
 		tfs_readdir();
 		tfs_unmount();
 	} else 
@@ -172,7 +173,6 @@ void printDiagnostics(int diskNum) {
 	}
 }
 
-//GOOD (except for the size saving?)
 int tfs_mkfs(char *filename, int nBytes) {
 	int index;
 	int block;
@@ -181,11 +181,10 @@ int tfs_mkfs(char *filename, int nBytes) {
 	
 	time(&timer);
 	
-	if((diskNum = openDisk(filename, nBytes)) == -1)
-		diskNum = -6; ////ERROR: Tried to make empty filesystem of size 0
+	diskNum = openDisk(filename, nBytes);
 	
 	if(nBytes < 2) //We assume that a file of just superblock and root inode can be made
-		diskNum = -4; //ERROR: FILESYSTEM SIZE TOO SMALL
+		diskNum = FILESYSTEM_TOO_SMALL; //ERROR: FILESYSTEM SIZE TOO SMALL
 	else {
 		format = calloc(BLOCKSIZE, sizeof(char));
 		format[1] = 0x45;
@@ -237,26 +236,19 @@ int tfs_mkfs(char *filename, int nBytes) {
 		}
 	
 		closeDisk(diskNum);
+		free(format);
 	}
 	
-  //TODO save size somewhere
 	return diskNum;
 }
 
-//GOOD
 int tfs_mount(char *filename) {
 	int status = -4; //ERROR: IMPROPER DISK FORMAT
 
-	status = openDisk(filename, 0); //We pass zero since its presumable ALREADY MADE
-
-	//if the file is non-existant, can't mount
-	if(status == -1)
-		status = -7; //ERROR: MAKE/MOUNT NON EXISTANT FILE 
-	else { //if the file is existant, check it is mountable (correct format)
-
+	if((status = openDisk(filename, 0)) >= 0) { //if the file is existant, check it is mountable (correct format)
 		if(verifyFormat(status) != 0) {
 			closeDisk(status);
-			status = -8; //ERROR: TRIED TO MOUNT FILE WITH WRONG FORMAT
+			status = BAD_FILESYSTEM_FORMAT;
 		} else {
 			//Set diskNum instance var and return it too
 			diskNum = status;
@@ -275,19 +267,16 @@ int tfs_mount(char *filename) {
  int tfs_unmount(void) {
  	int status = 0;
 
- 	if (!mounted) {
- 		//TODO: set errno /status
- 		status = -1;
-	}
+ 	if (!mounted)
+ 		status = NO_FILESYSTEM_MOUNTED;
 	else {
  		closeDisk(diskNum);
  		mounted = 0;
- 	}
-
+	}
+	
  	return status;
  }
  
- //GOOD
 fileDescriptor tfs_openFile(char *name) {
 	int status = -1;
 	struct openFile *endOfList = NULL;
@@ -300,9 +289,7 @@ fileDescriptor tfs_openFile(char *name) {
 	//so I imagine he wants a LL since we can malloc and free it.
 	
 	if(strlen(name) >= 8)
-		return -11; //STRING TOO LONG
-	
-
+		return FILENAME_TOO_LONG; //STRING TOO LONG
 	
 	//Iterate to spot in list right here
 	if(fileList == NULL) { //File list currently empty. Allocate LL head.
@@ -332,12 +319,11 @@ fileDescriptor tfs_openFile(char *name) {
 		endOfList->filepointer = -1;
 	}
 	else
-		inodeIndex = -12; //ERROR: FS is full (Cannot allocated inode)
+		inodeIndex = FILESYSTEM_IS_FULL;
 
 	return inodeIndex;
 }
 
-//GOOD
 int findFile(char *name) {
 	char *block = calloc(sizeof(char), BLOCKSIZE);
 	int nextInode = 1; //This is the INDEX of the next linked inode we read in.
@@ -375,10 +361,7 @@ int findFile(char *name) {
 			block[2] = -1;
 			strcpy(block + 4, name);
 			
-			//SET PERMS		
-			//////////////////////////////////
 			block[13] = (char) 1; //Permissions byte RW
-			/////////////////////////////////
 			
 			//Zero out data from before
 			for(index = 15; index < 19; index++)
@@ -390,12 +373,13 @@ int findFile(char *name) {
 			writeBlock(diskNum, fileInode, block); //Append new block to end of list
 		}
 	}
+	
+	free(block);
 
 	//This is the absolute index of the inode on the file. We either opened it or created it.
   return fileInode;
 }
 
-//GOOD
 int getFreeBlock() {
 	int freeBlockIndex = -1;
 	char *superBlock = calloc(sizeof(char), BLOCKSIZE);
@@ -419,7 +403,6 @@ int getFreeBlock() {
 	return freeBlock; //We return the absolute index of the freeblock
 }
 
-//GOOD
 int tfs_closeFile(fileDescriptor FD) {
 	struct openFile *prev = fileList;
 	struct openFile *next = fileList;
@@ -428,7 +411,7 @@ int tfs_closeFile(fileDescriptor FD) {
 	
 	//If there's just one element in the list
 	if(prev == NULL) //Filelist empty
-		status = -21; 
+		status = NO_FILES_IN_FILESYSTEM; 
 	else if(prev->fd == FD) {
 		free(prev->filename);
 		fileList = prev->next;
@@ -456,11 +439,11 @@ int tfs_closeFile(fileDescriptor FD) {
 //change the inode pointer to point to the offset instead of the first file extent
 int tfs_seek(fileDescriptor FD, int offset) {
 	struct openFile *file = fileList;
-	int status = -25; //File not found!
+	int status = FILE_NOT_FOUND;
 	int foundFile = 0;
 	
 	if(file == NULL)
-		status = -8; //ERROR: File empty on seek()
+		status = EMPTY_FILE;
 	else {
 		while(!foundFile && file) {
 			if(file->fd == FD) {
@@ -483,12 +466,12 @@ int tfs_rename(char *name, char *newName) {
 	int foundFile = 0;
 	int blockNum = 1;
 	int nextInode = 0;
-	int status = -1;
+	int status = 0;
 	
 	readBlock(diskNum, 1, block);
 	
 	if(!(strlen(newName) > 0 && strlen(newName) <= 8))
-		return -36; //ERROR: filename of improper length
+		return BAD_FILENAME_LENGTH;
 	
 	while(!foundFile) {			
 		if(strcmp(block + 4, name) == 0) {
@@ -504,10 +487,12 @@ int tfs_rename(char *name, char *newName) {
 				readBlock(diskNum, nextInode, block);
 			else {
 				foundFile = 1;
-				status = -12; //ERROR: File does not exist!
+				status = FILE_DOES_NOT_EXIST;
 			}
 		}
 	}
+	
+	free(block);
 	
 	return status;
 }
@@ -527,35 +512,29 @@ void tfs_readdir() {
 		readBlock(diskNum, block[2], block);
 		
 		while(!done) {
-			//printf("%s - %d bytes\n", block + 15, block[4]);
-			//CHANGED
-			// get size of file in bytes
-			int z;
+			int z; //int we read in to avoid endianess issues
 			memcpy(&z, block +15, 4);
 			printf("%s - %d bytes\n", block + 4, z);
 			printf("Created: %s\n", block + 19);
-
 
 			if(block[2] == -1)
 				done = 1;
 			else
 				readBlock(diskNum, block[2], block);
 		}
-	}	
+	}
+	
+	free(block);	
 }
-
-
-
-
 
 void tfs_readFileInfo(fileDescriptor FD) {
 	char *block = (char *) calloc(sizeof(char), BLOCKSIZE);
 	struct openFile *file = fileList;
-	int foundFile = 1;
+	int foundFile = 0;
 	int status = 0;
 	
 	if(file == NULL)
-		status = -8; //ERROR: File empty on seek()
+		status = EMPTY_FILE;
 	else {
 		while(!foundFile && file) {
 			if(file->fd == FD) {
@@ -575,14 +554,6 @@ void tfs_readFileInfo(fileDescriptor FD) {
 	free(block);
 }
 
-
-
-
-
-
-
-
-
 //////////////////////// KIRSTEN
 
 int tfs_makeRO(char *name) {
@@ -590,7 +561,7 @@ int tfs_makeRO(char *name) {
 	int foundFile = 0;
 	int blockNum = 1;
 	int nextInode = 0;
-	int status = -1;
+	int status = 0;
 	
 	readBlock(diskNum, 1, block); //read root inode
 	
@@ -608,10 +579,13 @@ int tfs_makeRO(char *name) {
 				readBlock(diskNum, nextInode, block);
 			else {
 				foundFile = 1;
-				status = -12; //ERROR: File does not exist!
+				status = FILE_DOES_NOT_EXIST;
 			}
 		}
 	}
+	
+	free(block);
+	
 	return status;
 }
 
@@ -620,7 +594,7 @@ int tfs_makeRW(char *name) {
 	int foundFile = 0;
 	int blockNum = 1;
 	int nextInode = 0;
-	int status = -1;
+	int status = 0;
 	
 	readBlock(diskNum, 1, block); //read root inode
 	
@@ -638,10 +612,13 @@ int tfs_makeRW(char *name) {
 				readBlock(diskNum, nextInode, block);
 			else {
 				foundFile = 1;
-				status = -12; //ERROR: File does not exist!
+				status = FILE_DOES_NOT_EXIST;
 			}
 		}
 	}
+	
+	free(block);
+	
 	return status;
 }
 
@@ -650,36 +627,6 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data) {
 
 	return status;
 }
-
-
-
-
-
-
-
-
-
-//READ ONLY AND WRITEBYTE SUPPORT GOES HERE
-
-
-
-///////////////////////////////////////////
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /*
  * Pass in the fd of the file system being mounted.  The file has been opened, but must 
@@ -753,7 +700,7 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 	int found = 0;
 
 	if (size >= BLOCKSIZE) 
-		status = -1; //break
+		status = EXCESS_WRITE_SIZE;
 	//make sure the file is open
 	if(fileList == NULL) {
 		//TODO: set error, for file not opened yet.
@@ -801,7 +748,7 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 					block[0] = 3;
 					block[2] = nextind;
 					block[3] = 0;
-					memcpy(block + 4, ind *(BLOCKSIZE - 4) + buffer, BLOCKSIZE - 4);
+					memcpy(block + 4, ind * (BLOCKSIZE - 4) + buffer, BLOCKSIZE - 4);
 					writeBlock(diskNum, freeind, block);
 					freeind = nextind;
 				}
@@ -811,15 +758,12 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 
 
 			}
-		} else {
-			status = -20; //TRIED TO MODIFY RO FILE
-		}
+		} else
+			status = MODIFYING_READ_ONLY_FILE;
+	} else
+		status = FILE_NOT_OPENED;
 
-	} else {
-		//TODO: set error for file not opened
-		//set status
-		printf("Error 2 in writeFile\n");
-	}
+	free(block);
 
 	return status;
 }
@@ -837,11 +781,8 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	int found = 0;
 
 	//make sure the file is open
-	if(fileList == NULL) {
-		//TODO: set error, for file not opened yet.
-		//set status
-		printf("ERROR 1 in readbyte file\n"); //TODO: remove later
-	} 
+	if(fileList == NULL)
+		status = FILE_NOT_OPENED;
 
 	do {
 		if (file->fd == FD) {
@@ -852,7 +793,7 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	} while (file != NULL && !found);
 
 	if (!found) 
-		status = -1;//set error...figure out details: TODO
+		status = FILE_DOES_NOT_EXIST;
 
 	//file holds filepointer...maybe move to inode?  oh well
 	//get which file extent:
@@ -861,9 +802,9 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	readBlock(diskNum, FD, block);  //block = inode
 
 	int z;
-	memcpy(&z, block +15, 4);
+	memcpy(&z, block + 15, 4);
 	if (z <= file->filepointer)  
-		status = -1;
+		status = READING_BEYOND_END_OF_FILE;
 	else {
 		int nextext = block[14]; //points to first extent
 
@@ -898,6 +839,8 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 		file->filepointer++;
 	}
 
+	free(block);
+
 	return status;
 }
 
@@ -911,8 +854,6 @@ int setFreeBlock(int bnum) {
 	int freeBlock;
 	
 	readBlock(diskNum, 0, superBlock); //Read in superblock
-	
-
 	readBlock(diskNum, bnum, newFree);
 
 	newFree[2] = superBlock[4];  //new free block points to what superblock used to
@@ -921,12 +862,12 @@ int setFreeBlock(int bnum) {
 	writeBlock(diskNum, bnum, newFree);
 	writeBlock(diskNum, 0, superBlock);	
 	
-	
 	free(superBlock);
 	free(newFree);
 	
 	return freeBlock; //We return the absolute index of the freeblock
 }
+
 /*
  * Deletes a file and marks its blocks as free on a disk.
 */
@@ -941,7 +882,7 @@ int tfs_deleteFile(fileDescriptor FD) {
 	int found = 0;
 	
 	if(file == NULL)
-		status = -9; //ERROR: File empty on sdelete()
+		status = EMPTY_FILE;
 
 	//grab file from dynamically allocated linked list of open files
 	do {
@@ -976,7 +917,7 @@ int tfs_deleteFile(fileDescriptor FD) {
 				writeBlock(diskNum, 1, rootinode);
 				//update dynamically allocated linked list
 				if (fileList->next == NULL) 
-					fileList == NULL;
+					fileList = NULL;
 				else
 					fileList = file->next;
 			} else { //file is in middle or end...
@@ -986,9 +927,8 @@ int tfs_deleteFile(fileDescriptor FD) {
 				writeBlock(diskNum, prevfile->fd, previnode);
 				prevfile->next = file->next;
 			}
-		} else {
-			status = -20; //tried to modify ro file
-		}
+		} else
+				status = MODIFYING_READ_ONLY_FILE; //tried to modify ro file
 	}
 
 	free(extent);
