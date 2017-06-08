@@ -312,7 +312,7 @@ int tfs_closeFile(fileDescriptor FD) {
 	struct openFile *next = fileList;
 	int status = 0;
 	int closed = 0;
-	
+
 	//If there's just one element in the list
 	if(prev == NULL) //Filelist empty
 		status = NO_FILES_IN_FILESYSTEM; 
@@ -539,15 +539,16 @@ int tfs_writeByte(fileDescriptor FD, unsigned int data) {
 	//make sure the file is open
 	if(fileList == NULL) {
 		status = -12; //file does not exist
-	} 
+	} else { 
 
-	do {
-		if (file->fd == FD) {
-			found = 1;
-		} else {
-			file = file->next;
-		}
-	} while (file != NULL && !found);
+		do {
+			if (file->fd == FD) {
+				found = 1;
+			} else {
+				file = file->next;
+			}
+		} while (file != NULL && !found);
+	}
 
 	if (found) {
 		//get which file extent:

@@ -82,6 +82,13 @@ int main(int argc, char** argv) {
 		tfs_readByte(fd, buf);
 		printf("%hhX \n", buf[0]);
 
+		printf("Close file \"dogs\" and try writing byte:\n");
+		tfs_closeFile(fd);
+		errorStr(tfs_writeByte(fd, 0xD));
+		printf("Open file and try writing byte:\n");
+		tfs_openFile("dogs");
+		errorStr(tfs_writeByte(fd, 0xD));
+
 		printf("UNMOUNT FS1\n");
 		printf("\nMOUNT FS2\n");
 
