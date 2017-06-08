@@ -73,6 +73,14 @@ int main(int argc, char** argv) {
 		errorStr(tfs_writeFile(fd, buffer, 5));
 		errorStr(tfs_deleteFile(fd));
 		errorStr(tfs_writeByte(fd, 0xD));
+		printf("MAKE \"dogs\" RW:\n");
+		tfs_makeRW("dogs");
+		printf("Seek to byte 10, write \"D\", seek back to byte 10 and read byte:\n");
+		tfs_seek(fd, 10);
+		errorStr(tfs_writeByte(fd, 0xD));
+		tfs_seek(fd, 10);
+		tfs_readByte(fd, buf);
+		printf("%hhX \n", buf[0]);
 
 		printf("UNMOUNT FS1\n");
 		printf("\nMOUNT FS2\n");
